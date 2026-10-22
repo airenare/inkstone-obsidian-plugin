@@ -61,7 +61,14 @@ export class ReloadScheduler {
       }
     };
     // A failed flush must not break later ones or the event loop.
-    result.then(done, done);
+    void (async () => {
+      try {
+        await result;
+      } catch {
+        /* swallowed on purpose */
+      }
+      done();
+    })();
   }
 
   /** Cancel any pending flush; later notify() calls do nothing. */

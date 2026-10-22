@@ -1,9 +1,10 @@
 {
   "id": "inkstone-preview",
   "name": "InkStone",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.14.4",
-  "description": "Preview notes as rendered by a local InkStone server.",
+  "description": "Preview notes as your InkStone site renders them, live beside the editor, and commit and push your site folder with Git.",
   "author": "Anton Bakulin",
-  "isDesktopOnly": true
+  "isDesktopOnly": true,
+  "authorUrl": "https://antonbakulin.com"
 }

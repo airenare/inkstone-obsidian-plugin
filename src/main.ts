@@ -99,9 +99,10 @@ export default class InkStonePlugin extends Plugin {
 
     this.app.workspace.onLayoutReady(() => {
       if (this.settings.autoStartServer) {
-        void this.startServer().then((r) => {
+        void (async () => {
+          const r = await this.startServer();
           if (!r.ok) new Notice(`InkStone: ${r.message}`);
-        });
+        })();
       }
     });
   }
@@ -134,7 +135,7 @@ export default class InkStonePlugin extends Plugin {
       try {
         await v.refreshAndReload();
       } catch {
-        console.warn("InkStone: auto-reload failed for a preview");
+        console.error("InkStone: auto-reload failed for a preview");
       }
     }
   }

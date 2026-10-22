@@ -84,6 +84,17 @@ Hover a disabled button to see why. The preview works in every state. A few deta
 - The server is started with a pipe on its stdin that Obsidian keeps open. When Obsidian exits for any reason, the pipe closes and InkStone (1.58.0 or newer) shuts itself down.
 - The dev source-map endpoint (what lets clicks in the preview open the right note) exists only when the plugin starts InkStone itself with `INKSTONE_DEV_API=1`. A server you run on your own doesn't have it.
 
+## Disclosures
+
+Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
+
+- **Network use.** The plugin itself doesn't contact any remote service. It talks only to the InkStone server it starts on `127.0.0.1`. Two things can still reach the network on your behalf: the pages InkStone renders can load whatever your site's theme and settings include (for example Giscus comments or web fonts), and the git panel runs your own `git`, which contacts your git remote when you click Pull or Push.
+- **Files outside your vault.** InkStone is a separate program, so the plugin has to reach outside the vault. It reads the **site folder** you choose, which can be anywhere on disk. It checks the **InkStone checkout** (`app.py` and `VERSION`) and runs Python from it. It runs `git` in the site folder, and only changes anything when you click Commit, Pull or Push. The plugin never edits your notes itself.
+- **Runs other programs.** It starts your Python (running InkStone) and `git` as child processes. Both are stopped when Obsidian closes.
+- **No account, payment, ads or telemetry.** The plugin sends nothing anywhere, and it never installs or updates itself or any dependency.
+- **Open source.** MIT licensed, readable source, no obfuscation.
+- **Not affiliated with Obsidian.** InkStone for Obsidian is an independent community plugin.
+
 ## Troubleshooting
 
 | You see | What to do |

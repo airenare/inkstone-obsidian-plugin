@@ -166,7 +166,8 @@ function realDeps(): ServerDeps {
     pickPort: pickFreePort,
     getPath: getLoginShellPath,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-    log: (m) => console.log(`[inkstone] ${m}`),
+    // Obsidian's guidelines allow console output for errors only.
+    log: () => undefined,
     platform: process.platform,
     baseEnv: process.env,
     installExitHooks: installExitHooksReal,
