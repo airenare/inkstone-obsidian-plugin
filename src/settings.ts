@@ -40,7 +40,9 @@ export class InkStoneSettingTab extends PluginSettingTab {
     const folder = new Setting(containerEl)
       .setName("Site folder")
       .setDesc(
-        "Folder holding your site notes. Any folder in the vault or on disk.",
+        "Folder holding your site notes. Relative paths resolve against " +
+          "the vault. Folders outside the vault still preview, but " +
+          "auto-reload and editor sync only work inside the vault.",
       );
     folder.addText((t) =>
       t.setValue(s.siteFolder).onChange((v) => this.applyChange({ siteFolder: v })),

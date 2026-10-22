@@ -8,6 +8,7 @@ Obsidian desktop plugin (TypeScript) that previews notes via a local InkStone se
 - `npm run dev` - esbuild watch mode
 - `npm test` - vitest
 - Requires Node 20 (see `.nvmrc`)
+- Release: tag must equal `manifest.json` `version` exactly, no `v` prefix (e.g. `0.1.0`); the workflow enforces it
 
 ## Rules
 

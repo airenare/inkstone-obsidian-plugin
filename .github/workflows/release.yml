@@ -13,6 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check tag matches manifest version
+        run: |
+          version=$(node -p "require('./manifest.json').version")
+          if [ "${GITHUB_REF_NAME}" != "${version}" ]; then
+            echo "Tag '${GITHUB_REF_NAME}' must equal manifest.json version '${version}' (no 'v' prefix)."
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 20
