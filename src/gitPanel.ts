@@ -1,6 +1,6 @@
 import { Notice } from "obsidian";
 import { GitError, type GitChange, type GitService, type GitState } from "./git";
-import { buttonStates, type ButtonState } from "./gitPanelState";
+import { buttonStates, formatDiffForDisplay, type ButtonState } from "./gitPanelState";
 
 export const DEFAULT_COMMIT_MESSAGE = "Update site content";
 const NOTICE_MAX = 200;
@@ -202,13 +202,8 @@ export class GitPanel {
     btn.disabled = off;
     btn.toggleClass("is-disabled", off);
     const tip = !s.enabled ? (s.hint ?? "") : extra;
-    if (tip && !this.busy) {
-      btn.setAttribute("title", tip);
-      btn.setAttribute("aria-label", tip);
-    } else {
-      btn.removeAttribute("title");
-      btn.removeAttribute("aria-label");
-    }
+    if (tip && !this.busy) btn.setAttribute("title", tip);
+    else btn.removeAttribute("title");
   }
 
   private updateButtons(): void {
@@ -248,7 +243,7 @@ export class GitPanel {
         this.updateButtons();
       });
       row.createSpan({ cls: "inkstone-git-letter", text: c.status });
-      const name = row.createSpan({
+      const name = row.createEl("button", {
         cls: "inkstone-git-name",
         text: c.origPath ? `${c.origPath} -> ${c.path}` : c.path,
       });
@@ -275,7 +270,7 @@ export class GitPanel {
     this.setBusy(true);
     try {
       const diff = await this.opts.getService().diff(path);
-      if (seq === this.diffSeq) this.diffEl.setText(diff || "(no textual diff)");
+      if (seq === this.diffSeq) this.showDiff(diff);
     } catch (e) {
       if (seq === this.diffSeq) {
         this.diffEl.setText("");
@@ -285,6 +280,22 @@ export class GitPanel {
       this.setBusy(false);
       this.drainQueue();
     }
+  }
+
+  private showDiff(diff: string): void {
+    const d = formatDiffForDisplay(diff);
+    if (d.binary) {
+      this.diffEl.setText("Binary file, no preview");
+      return;
+    }
+    let text = d.text || "(no textual diff)";
+    if (d.truncated) {
+      const kb = (n: number): number => Math.round(n / 1024);
+      const total = new TextEncoder().encode(diff).length;
+      const shown = new TextEncoder().encode(d.text).length;
+      text += `\n\n(truncated: showing first ${kb(shown)} KB of ${kb(total)} KB)`;
+    }
+    this.diffEl.setText(text);
   }
 
   private showError(e: unknown): void {

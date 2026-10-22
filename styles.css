@@ -188,3 +188,15 @@
   margin-top: var(--size-4-1);
   color: var(--text-muted);
 }
+.inkstone-git button.inkstone-git-name {
+  all: unset;
+  cursor: pointer;
+  color: var(--text-accent);
+  overflow-wrap: anywhere;
+}
+.inkstone-git button.inkstone-git-name:hover {
+  text-decoration: underline;
+}
+.inkstone-git button.inkstone-git-name:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+}

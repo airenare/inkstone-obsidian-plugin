@@ -31,3 +31,42 @@ describe("buttonStates", () => {
     });
   });
 });
+
+import { DIFF_MAX_BYTES, formatDiffForDisplay } from "../src/gitPanelState";
+
+describe("formatDiffForDisplay", () => {
+  it("leaves a small diff unchanged", () => {
+    const d = "@@ -1 +1 @@\n-a\n+b\n";
+    expect(formatDiffForDisplay(d)).toEqual({
+      text: d,
+      truncated: false,
+      binary: false,
+    });
+  });
+
+  it("truncates a large diff at the cap", () => {
+    const d = "x".repeat(DIFF_MAX_BYTES + 500);
+    const r = formatDiffForDisplay(d);
+    expect(r.truncated).toBe(true);
+    expect(r.binary).toBe(false);
+    expect(r.text.length).toBe(DIFF_MAX_BYTES);
+  });
+
+  it("flags binary diffs", () => {
+    expect(
+      formatDiffForDisplay("Binary files a/x.png and b/x.png differ\n").binary,
+    ).toBe(true);
+    expect(
+      formatDiffForDisplay("diff --git a/x b/x\nGIT binary patch\nliteral 3\n")
+        .binary,
+    ).toBe(true);
+  });
+
+  it("does not split a multi-byte character at the cut", () => {
+    // 3-byte chars; a cap of 10 bytes lands mid-character.
+    const r = formatDiffForDisplay("€".repeat(100), 10);
+    expect(r.truncated).toBe(true);
+    expect(r.text).toBe("€€€");
+    expect(r.text).not.toContain("�");
+  });
+});
