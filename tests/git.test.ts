@@ -163,9 +163,134 @@ describe("GitService.changes / diff", () => {
 
 describe("GitService.commit / push / pull", () => {
   it("rejects empty paths or blank message before running git", async () => {
-    const s = svc(path.join(tmp, "does-not-exist"));
+    const { work } = repoWithRemote();
+    write(path.join(work, "a.md"), "changed\n");
+    git(work, "add", "a.md");
+    const head = git(work, "rev-parse", "HEAD");
+    const idx = git(work, "status", "--porcelain");
+    const s = svc(work);
     await expect(s.commit([], "m")).rejects.toBeInstanceOf(GitError);
     await expect(s.commit(["a.md"], "  ")).rejects.toBeInstanceOf(GitError);
+    expect(git(work, "rev-parse", "HEAD")).toBe(head);
+    expect(git(work, "status", "--porcelain")).toBe(idx);
+  });
+
+  it("treats glob characters literally", async () => {
+    const d = path.join(tmp, "r");
+    initRepo(d);
+    write(path.join(d, "[d] idea.md"), "1\n");
+    write(path.join(d, "d idea.md"), "1\n");
+    write(path.join(d, "x.md"), "1\n");
+    git(d, "add", ".");
+    git(d, "commit", "-q", "-m", "i");
+    for (const f of ["[d] idea.md", "d idea.md", "x.md"]) {
+      write(path.join(d, f), "2\n");
+    }
+    await svc(d).commit(["[d] idea.md"], "one");
+    expect(git(d, "show", "--name-only", "--format=", "HEAD").trim()).toBe(
+      "[d] idea.md",
+    );
+    await svc(d).commit(["*.md"], "star").catch(() => {});
+    expect(git(d, "status", "--porcelain")).toContain(' M "d idea.md"');
+    expect(git(d, "status", "--porcelain")).toContain(" M x.md");
+  });
+
+  it("rejects ':/', '..' and absolute paths without staging", async () => {
+    const root = path.join(tmp, "big");
+    initRepo(root);
+    write(path.join(root, "site/a.md"), "1\n");
+    write(path.join(root, "other/x.md"), "1\n");
+    git(root, "add", ".");
+    git(root, "commit", "-q", "-m", "i");
+    write(path.join(root, "other/x.md"), "2\n");
+    const s = svc(path.join(root, "site"));
+    await expect(s.commit([":/"], "m")).rejects.toBeInstanceOf(GitError);
+    await expect(s.commit(["../other/x.md"], "m")).rejects.toThrow(/outside/);
+    await expect(s.commit([path.join(root, "other/x.md")], "m")).rejects
+      .toThrow(/outside/);
+    await expect(s.diff("../other/x.md")).rejects.toThrow(/outside/);
+    expect(git(root, "status", "--porcelain").trim()).toBe("M other/x.md");
+    expect(git(root, "status", "--porcelain")).toBe(" M other/x.md\n");
+  });
+
+  it("push never force-pushes a branch named +main", async () => {
+    const { bare, work } = repoWithRemote();
+    const other = path.join(tmp, "other");
+    git(tmp, "clone", "-q", bare, other);
+    write(path.join(other, "r.md"), "remote\n");
+    git(other, "add", ".");
+    git(other, "commit", "-q", "-m", "remote only");
+    git(other, "push", "-q");
+    const remoteHead = git(bare, "rev-parse", "main").trim();
+    git(work, "checkout", "-q", "-b", "+main");
+    write(path.join(work, "a.md"), "local\n");
+    git(work, "commit", "-qam", "local");
+    await expect(svc(work).push()).rejects.toBeInstanceOf(GitError);
+    expect(git(bare, "rev-parse", "main").trim()).toBe(remoteHead);
+  });
+
+  it("nothing-to-commit error keeps git's stdout text, no leaks", async () => {
+    const { work } = repoWithRemote();
+    let err: GitError | undefined;
+    try {
+      await svc(work).commit(["a.md"], "SECRETMSG");
+    } catch (e) {
+      err = e as GitError;
+    }
+    expect(err).toBeInstanceOf(GitError);
+    expect(err!.message).toMatch(/nothing to commit|no changes/i);
+    expect(err!.message).not.toContain("SECRETMSG");
+    expect(err!.message).not.toContain("a.md");
+  });
+
+  it("commits a staged rename with its source", async () => {
+    const d = path.join(tmp, "r");
+    initRepo(d);
+    write(path.join(d, "old.md"), "some longer content here\n");
+    git(d, "add", ".");
+    git(d, "commit", "-q", "-m", "i");
+    git(d, "mv", "old.md", "new.md");
+    const ch = await svc(d).changes();
+    expect(ch).toEqual([{ path: "new.md", status: "R", origPath: "old.md" }]);
+    await svc(d).commit(["new.md"], "rename");
+    expect(git(d, "status", "--porcelain").trim()).toBe("");
+  });
+
+  it("commits a deleted file as a deletion", async () => {
+    const d = path.join(tmp, "r");
+    initRepo(d);
+    write(path.join(d, "gone.md"), "x\n");
+    git(d, "add", ".");
+    git(d, "commit", "-q", "-m", "i");
+    fs.rmSync(path.join(d, "gone.md"));
+    await svc(d).commit(["gone.md"], "del");
+    expect(git(d, "status", "--porcelain").trim()).toBe("");
+    expect(git(d, "show", "--name-status", "--format=", "HEAD").trim()).toBe(
+      "D\tgone.md",
+    );
+  });
+
+  it("failed commit restores the index for its paths only", async () => {
+    const d = path.join(tmp, "r");
+    initRepo(d);
+    write(path.join(d, "a.md"), "1\n");
+    write(path.join(d, "b.md"), "1\n");
+    git(d, "add", ".");
+    git(d, "commit", "-q", "-m", "i");
+    write(path.join(d, "a.md"), "2\n");
+    write(path.join(d, "b.md"), "2\n");
+    git(d, "add", "b.md");
+    const hook = path.join(d, ".git/hooks/pre-commit");
+    fs.writeFileSync(hook, "#!/bin/sh\necho HOOKFAIL >&2\nexit 1\n");
+    fs.chmodSync(hook, 0o755);
+    await expect(svc(d).commit(["a.md"], "m")).rejects.toThrow(/HOOKFAIL/);
+    expect(git(d, "status", "--porcelain")).toBe(" M a.md\nM  b.md\n");
+  });
+
+  it("reports a missing site folder clearly", async () => {
+    const s = svc(path.join(tmp, "missing"));
+    await expect(s.state()).rejects.toThrow(/does not exist/);
+    await expect(s.state()).rejects.not.toThrow(/not found on PATH/);
   });
 
   it("commits only the given paths and pushes to the remote", async () => {

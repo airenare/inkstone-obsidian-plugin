@@ -1,4 +1,6 @@
 import { execFile } from "child_process";
+import { promises as fsp } from "fs";
+import * as nodePath from "path";
 import { getLoginShellPath } from "./shellEnv";
 
 export type GitState =
@@ -8,6 +10,8 @@ export type GitState =
 export interface GitChange {
   path: string;
   status: string;
+  /** Source path of a rename or copy (relative to the site folder). */
+  origPath?: string;
 }
 
 export interface GitServiceOptions {
@@ -101,6 +105,8 @@ export class GitService {
     const out: GitChange[] = [];
     const rel = (p: string) =>
       prefix && p.startsWith(prefix) ? p.slice(prefix.length) : p;
+    const relOrig = (p: string) =>
+      nodePath.posix.relative(prefix.replace(/\/$/, "") || ".", p);
     for (let i = 0; i < parts.length; i++) {
       const entry = parts[i];
       if (entry.length < 4) continue;
@@ -109,6 +115,12 @@ export class GitService {
       // Renames and copies carry the original path as the next field.
       if (xy[0] === "R" || xy[0] === "C" || xy[1] === "R" || xy[1] === "C") {
         i++;
+        out.push({
+          path: rel(file),
+          status: xy.trim(),
+          origPath: relOrig(parts[i] ?? ""),
+        });
+        continue;
       }
       out.push({ path: rel(file), status: xy.trim() });
     }
@@ -116,6 +128,7 @@ export class GitService {
   }
 
   async diff(path: string): Promise<string> {
+    assertInsideFolder(path);
     const untracked = await this.run([
       "ls-files",
       "--others",
@@ -157,11 +170,36 @@ export class GitService {
     if (message.trim() === "") {
       throw new GitError("Commit message must not be empty.");
     }
+    for (const p of paths) assertInsideFolder(p);
+    // A staged rename must commit with its source, or only half is recorded.
+    const wanted = new Set(paths.map(normalizeRel));
+    const all = [...paths];
+    for (const c of await this.changes()) {
+      if (c.origPath && wanted.has(normalizeRel(c.path))) {
+        all.push(c.origPath);
+      }
+    }
     await this.run(["add", "--", ...paths]);
-    // `-- <paths>` (--only) commits just these, leaving other staged files.
-    await this.run(["commit", "-m", message, "--", ...paths]);
+    try {
+      // `-- <paths>` (--only) commits just these, leaving other staged
+      // files alone. Hooks and GPG pinentry can be slow, so use the long
+      // timeout. A SIGKILL here may leave .git/index.lock behind.
+      await this.run(["commit", "-m", message, "--", ...all], {
+        network: true,
+      });
+    } catch (err) {
+      // Undo our staging for these paths only; keep the original error.
+      try {
+        await this.run(["reset", "-q", "--", ...all]);
+      } catch {
+        /* best effort */
+      }
+      throw err;
+    }
   }
 
+  // Note: killing `pull --rebase` at the timeout can leave a rebase in
+  // progress in the repo; the git message on the next call will say so.
   async pull(): Promise<void> {
     await this.run(["pull", "--rebase"], { network: true });
   }
@@ -186,7 +224,14 @@ export class GitService {
     if (!branch) {
       throw new GitError("Cannot push from a detached HEAD.");
     }
-    await this.run(["push", "-u", remotes[0], branch], { network: true });
+    if (/^[+-]/.test(branch)) {
+      throw new GitError(`Refusing to push branch "${branch}".`);
+    }
+    // Explicit non-forcing refspec: the branch name is never parsed as one.
+    await this.run(
+      ["push", "-u", "--", remotes[0], `HEAD:refs/heads/${branch}`],
+      { network: true },
+    );
   }
 
   private async remotes(): Promise<string[]> {
@@ -201,7 +246,8 @@ export class GitService {
   }
 
   private fail(r: RunResult, args: string[]): GitError {
-    const msg = r.stderr.trim() || `git ${args[0]} failed`;
+    const msg =
+      r.stderr.trim() || r.stdout.trim() || `git ${args[0]} failed`;
     return new GitError(msg, r.stderr, r.code, `git ${args[0]}`);
   }
 
@@ -214,6 +260,7 @@ export class GitService {
       GIT_ASKPASS: "",
       SSH_ASKPASS: "",
       GCM_INTERACTIVE: "never",
+      GIT_LITERAL_PATHSPECS: "1",
       ...o.env,
     };
     const timeout = o.network
@@ -221,6 +268,11 @@ export class GitService {
       : (this.opts.localTimeoutMs ?? LOCAL_TIMEOUT_MS);
     // Subcommand name only: arguments may contain note names or messages.
     const name = args.find((a) => /^[a-z][a-z-]*$/.test(a)) ?? "git";
+    try {
+      if (!(await fsp.stat(this.siteFolder)).isDirectory()) throw new Error();
+    } catch {
+      throw new GitError(`Site folder does not exist: ${this.siteFolder}`);
+    }
     return new Promise((resolve, reject) => {
       const child = execFile(
         "git",
@@ -263,7 +315,7 @@ export class GitService {
           }
           reject(
             new GitError(
-              se.trim() || e.message,
+              se.trim() || so.trim() || `git ${name} failed`,
               se,
               code,
               `git ${name}`,
@@ -273,5 +325,25 @@ export class GitService {
       );
       child.stdin?.end();
     });
+  }
+}
+
+function normalizeRel(p: string): string {
+  const q = process.platform === "win32" ? p.replace(/\\/g, "/") : p;
+  return nodePath.posix.normalize(q);
+}
+
+/** Reject empty, absolute, drive, or escaping (`..`) paths. */
+function assertInsideFolder(p: string): void {
+  const q = process.platform === "win32" ? p.replace(/\\/g, "/") : p;
+  const n = nodePath.posix.normalize(q);
+  if (
+    p === "" ||
+    q.startsWith("/") ||
+    /^[a-zA-Z]:/.test(q) ||
+    n === ".." ||
+    n.startsWith("../")
+  ) {
+    throw new GitError("Path is outside the site folder.");
   }
 }
