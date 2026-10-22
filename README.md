@@ -8,6 +8,8 @@ See your notes the way your InkStone site will show them, without leaving Obsidi
 - **Auto-reload on save.** The preview refreshes when you save.
 - **Git panel.** Pull, commit, push and view diffs for your site folder, using your own git setup.
 
+**Early release.** This is 0.1.0. The unit tests pass, but nobody has run the plugin in a live Obsidian yet, so expect rough edges. Please report what you hit.
+
 ## Requirements
 
 - Obsidian desktop. Mobile isn't supported, because the plugin starts a local process.
@@ -45,13 +47,13 @@ Hover a disabled button to see why. Large or binary diffs are truncated or skipp
 
 ## Privacy and security
 
-- The plugin doesn't store or send any tokens or credentials.
+- The plugin never stores credentials. The Owner view token is random, kept in memory, and only sent to the local InkStone server the plugin started.
 - Git runs with your existing git config and credentials. The plugin never touches them.
-- The Owner view token is random, generated each run, and kept in memory only.
 - The dev source-map endpoint (used for syncing the preview back to the editor) exists only when the plugin starts InkStone itself with `INKSTONE_DEV_API=1`. A server you run on your own doesn't get it.
 
 ## Known limitations
 
+- Early 0.1.0 release: unit tests pass, but it hasn't been tested in a running Obsidian yet. Two things are especially unverified: whether an external link navigation really gets stopped in the preview, and the final URL after the Owner view token redirect.
 - Links with `target="_blank"` do nothing in the preview.
 - If Obsidian is hard-killed, the local server can keep running until you end it yourself.
 - A `.env` file with `URL_PATH_PREFIX` isn't supported.
