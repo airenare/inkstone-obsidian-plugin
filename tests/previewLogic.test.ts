@@ -3,7 +3,9 @@ import {
   decideEditorTarget,
   decidePreviewTarget,
   displayUrl,
+  externalOpenAllowed,
   siteRelativePath,
+  unpublishedPanel,
   vaultPathForSiteFile,
 } from "../src/previewLogic";
 import { SourceMap, type SourceEntry } from "../src/sourceMap";
@@ -312,5 +314,49 @@ describe("decideAfterSave", () => {
     expect(decideAfterSave({ shownUrl: null, before: base, after: base })).toBe(
       "retarget",
     );
+  });
+});
+
+describe("externalOpenAllowed", () => {
+  it("allows http, https and mailto", () => {
+    expect(externalOpenAllowed("https://example.com/a")).toBe(true);
+    expect(externalOpenAllowed("http://example.com")).toBe(true);
+    expect(externalOpenAllowed("HTTPS://EXAMPLE.COM")).toBe(true);
+    expect(externalOpenAllowed("mailto:me@example.com")).toBe(true);
+  });
+  it("refuses every other scheme", () => {
+    expect(externalOpenAllowed("file:///etc/passwd")).toBe(false);
+    expect(externalOpenAllowed("obsidian://open?vault=x")).toBe(false);
+    expect(externalOpenAllowed("javascript:alert(1)")).toBe(false);
+    expect(externalOpenAllowed("ms-settings:")).toBe(false);
+    expect(externalOpenAllowed("data:text/html,hi")).toBe(false);
+  });
+  it("refuses malformed or relative URLs", () => {
+    expect(externalOpenAllowed("")).toBe(false);
+    expect(externalOpenAllowed("not a url")).toBe(false);
+    expect(externalOpenAllowed("/relative/path")).toBe(false);
+    expect(externalOpenAllowed("http://")).toBe(false);
+  });
+});
+
+describe("unpublishedPanel", () => {
+  it("asks for website: true on a markdown note", () => {
+    const p = unpublishedPanel("Post.md", "md");
+    expect(p.title).toContain("website: true");
+    expect(p.body).toContain('"website: true"');
+    expect(p.body).toContain("Post.md");
+  });
+  it("asks for the __website suffix on bases and canvases", () => {
+    const b = unpublishedPanel("My View.base", "base");
+    expect(b.body).toContain("__website");
+    expect(b.body).toContain("My View__website.base");
+    expect(b.body).not.toContain("website: true");
+    const c = unpublishedPanel("Board.canvas", "canvas");
+    expect(c.body).toContain("Board__website.canvas");
+    expect(c.title).not.toContain("website: true");
+  });
+  it("explains that other files are not pages", () => {
+    const p = unpublishedPanel("pic.png", "png");
+    expect(p.body).toContain("isn't a page");
   });
 });

@@ -160,3 +160,48 @@ export function decideAfterSave(input: {
   if (!now.published && !now.private) return "retarget";
   return "reload";
 }
+
+const EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
+
+/**
+ * Whether a link leaving the site may open in the system browser. Only
+ * http(s) and mailto: anything else (file:, obsidian:, custom schemes)
+ * could reach the OS handler, so it is dropped. Malformed URLs too.
+ */
+export function externalOpenAllowed(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (!EXTERNAL_SCHEMES.has(u.protocol)) return false;
+  return u.protocol === "mailto:" || u.hostname !== "";
+}
+
+/** Panel text for a file the site does not publish, by file type. */
+export function unpublishedPanel(
+  fileName: string,
+  extension: string,
+): { title: string; body: string } {
+  if (extension === "md") {
+    return {
+      title: 'Not published (no "website: true")',
+      body: `Add "website: true" to the frontmatter of "${fileName}" to publish it.`,
+    };
+  }
+  if (extension === "base" || extension === "canvas") {
+    const ext = `.${extension}`;
+    const stem = fileName.endsWith(ext)
+      ? fileName.slice(0, -ext.length)
+      : fileName;
+    return {
+      title: "Not published (no __website suffix)",
+      body: `Rename "${fileName}" to "${stem}__website${ext}" to publish it.`,
+    };
+  }
+  return {
+    title: "Not published",
+    body: `"${fileName}" isn't a page; only notes, bases and canvases are.`,
+  };
+}

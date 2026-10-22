@@ -12,7 +12,9 @@ import {
   decideEditorTarget,
   decidePreviewTarget,
   displayUrl,
+  externalOpenAllowed,
   siteRelativePath,
+  unpublishedPanel,
   vaultPathForSiteFile,
 } from "./previewLogic";
 import type { ServerStatus } from "./server";
@@ -350,15 +352,9 @@ export class InkStonePreviewView extends ItemView {
       owner && !this.sessionUnlocked ? this.plugin.server.token : "";
     const target = decidePreviewTarget(entry, owner, token);
     if (target.kind !== "url") {
-      const isPage = ["md", "base", "canvas"].includes(file.extension);
       this.setPrivateBadge(false);
       this.targetPanel = true;
-      this.showPanel({
-        title: 'Not published (no "website: true")',
-        body: isPage
-          ? `Add "website: true" to "${file.name}" to publish it.`
-          : `"${file.name}" isn't a page; only notes, bases and canvases are.`,
-      });
+      this.showPanel(unpublishedPanel(file.name, file.extension));
       return;
     }
     this.setPrivateBadge(!!entry?.private);
@@ -435,9 +431,10 @@ export class InkStonePreviewView extends ItemView {
   /** User clicked a link (or the page set location): sync the editor. */
   private onWillNavigate(url: string): void {
     if (this.baseUrl && originOf(url) !== originOf(this.baseUrl)) {
-      // External link: keep the preview on the site, open it in a browser.
+      // External link: keep the preview on the site. Only web and mail
+      // links go to the system browser; other schemes are dropped.
       this.webview?.stop();
-      window.open(url);
+      if (externalOpenAllowed(url)) window.open(url);
       return;
     }
     this.currentUrl = url;
