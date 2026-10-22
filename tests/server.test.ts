@@ -42,6 +42,7 @@ function makeDeps(
     platform: "darwin",
     baseEnv: { HOME: "/home/x", FOO: "bar" },
     installExitHooks: () => () => {},
+    vaultBasePath: () => null,
     ...overrides,
   };
   return { deps, child, spawn, killTree, log, probe };
@@ -50,7 +51,7 @@ function makeDeps(
 describe("buildServerEnv", () => {
   it("overrides the three vars and enables the dev API", () => {
     const env = buildServerEnv(
-      settings,
+      "/site",
       5555,
       "tok",
       { VAULT_PATH: "rel", ACCESS_TOKEN: "old", SECRET_KEY: "old", X: "1" },
@@ -65,8 +66,8 @@ describe("buildServerEnv", () => {
   });
 
   it("generates a random secret key when none is given", () => {
-    const a = buildServerEnv(settings, 1, "t", {});
-    const b = buildServerEnv(settings, 1, "t", {});
+    const a = buildServerEnv("/site", 1, "t", {});
+    const b = buildServerEnv("/site", 1, "t", {});
     expect(a.SECRET_KEY).toMatch(/^[0-9a-f]{64}$/);
     expect(a.SECRET_KEY).not.toBe(b.SECRET_KEY);
   });
@@ -108,6 +109,26 @@ describe("InkStoneServer", () => {
     expect(opts.detached).toBe(true);
     expect(opts.env.PATH).toBe("/usr/bin:/bin");
     expect(opts.env.ACCESS_TOKEN).toBe(server.token);
+  });
+
+  it("resolves a relative site folder against the vault", async () => {
+    const { deps, spawn } = makeDeps({ vaultBasePath: () => "/vault" });
+    const server = new InkStoneServer(
+      { ...settings, siteFolder: "notes/site" },
+      deps,
+    );
+    await server.start();
+    const opts = (spawn.mock.calls[0] as any[])[2];
+    expect(opts.env.VAULT_PATH).toBe("/vault/notes/site");
+  });
+
+  it("refuses to start without a usable site folder", async () => {
+    const { deps, spawn } = makeDeps({ vaultBasePath: () => null });
+    for (const siteFolder of ["", "relative"]) {
+      const server = new InkStoneServer({ ...settings, siteFolder }, deps);
+      await expect(server.start()).rejects.toThrow(/site folder/i);
+    }
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it("uses an explicit python path when set", async () => {

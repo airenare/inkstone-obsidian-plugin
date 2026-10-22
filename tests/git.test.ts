@@ -413,3 +413,13 @@ describe("GitService never hangs", () => {
     ).rejects.toBeInstanceOf(GitError);
   });
 });
+
+describe("GitService construction", () => {
+  it("refuses an empty or relative site folder", () => {
+    expect(() => new GitService("")).toThrow(/site folder/i);
+    expect(() => new GitService("site")).toThrow(/site folder/i);
+  });
+  it("accepts an absolute folder", () => {
+    expect(() => new GitService("/tmp/site")).not.toThrow();
+  });
+});

@@ -9,12 +9,17 @@ export interface ButtonStates {
   push: ButtonState;
 }
 
+/** What the panel shows: a git state, or no usable site folder. */
+export type PanelGitState = GitState | { kind: "no-site" };
+
+export const NO_SITE = "Site folder not set";
 const NO_REPO = "Folder is not a git repo";
 const NO_REMOTE = "No remote configured";
 
-export function buttonStates(state: GitState): ButtonStates {
-  if (state.kind === "not-repo") {
-    const off = { enabled: false, hint: NO_REPO };
+export function buttonStates(state: PanelGitState): ButtonStates {
+  if (state.kind === "no-site" || state.kind === "not-repo") {
+    const hint = state.kind === "no-site" ? NO_SITE : NO_REPO;
+    const off = { enabled: false, hint };
     return { pull: { ...off }, commit: { ...off }, push: { ...off } };
   }
   if (!state.hasRemote) {

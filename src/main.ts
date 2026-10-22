@@ -1,5 +1,4 @@
 import { FileSystemAdapter, Notice, Plugin, type TAbstractFile } from "obsidian";
-import { resolve as resolvePath } from "path";
 import {
   pathsToNotify,
   RELOAD_DEBOUNCE_MS,
@@ -7,7 +6,12 @@ import {
   type ReloadScheduler,
 } from "./autoReload";
 import { GitService } from "./git";
-import { validateEnvironment } from "./environment";
+import {
+  realDeps as envDeps,
+  validateEnvironment,
+  type EnvironmentResult,
+} from "./environment";
+import { resolveSiteFolder } from "./paths";
 import { InkStonePreviewView, VIEW_TYPE_PREVIEW } from "./previewView";
 import { InkStoneServer, type ServerStatus } from "./server";
 import {
@@ -32,7 +36,9 @@ export default class InkStonePlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    this.server = new InkStoneServer(this.settings);
+    this.server = new InkStoneServer(this.settings, {
+      vaultBasePath: () => this.vaultBasePath(),
+    });
     // One listener for the plugin's lifetime; views come and go.
     this.server.on("status", (s) => {
       for (const v of this.previewViews()) {
@@ -101,10 +107,10 @@ export default class InkStonePlugin extends Plugin {
   }
 
   private onVaultChange(...paths: string[]): void {
-    const adapter = this.app.vault.adapter;
-    if (!(adapter instanceof FileSystemAdapter)) return;
-    const site = resolvePath(this.settings.siteFolder);
-    if (!pathsToNotify(adapter.getBasePath(), site, paths)) return;
+    const vaultBase = this.vaultBasePath();
+    const site = this.siteFolderPath();
+    if (!vaultBase || !site) return;
+    if (!pathsToNotify(vaultBase, site, paths)) return;
     // Git panel refresh is independent of the server and is a no-op
     // while the panel is collapsed.
     this.gitRefresher?.notify();
@@ -122,9 +128,33 @@ export default class InkStonePlugin extends Plugin {
     }
   }
 
-  /** A git service for the current site folder. */
-  gitService(): GitService {
-    return new GitService(resolvePath(this.settings.siteFolder));
+  /** The vault's folder on disk, or null when the adapter has none. */
+  vaultBasePath(): string | null {
+    const adapter = this.app.vault.adapter;
+    return adapter instanceof FileSystemAdapter ? adapter.getBasePath() : null;
+  }
+
+  /** The absolute site folder, or null when none is usable. */
+  siteFolderPath(): string | null {
+    return resolveSiteFolder(
+      this.settings.siteFolder,
+      this.vaultBasePath(),
+      process.platform,
+    );
+  }
+
+  /** A git service for the site folder; null when none is set. */
+  gitService(): GitService | null {
+    const site = this.siteFolderPath();
+    return site ? new GitService(site) : null;
+  }
+
+  /** Checks the current settings (relative paths against the vault). */
+  validate(): Promise<EnvironmentResult> {
+    return validateEnvironment(this.settings, {
+      ...envDeps,
+      vaultBasePath: this.vaultBasePath(),
+    });
   }
 
   private previewViews(): InkStonePreviewView[] {
@@ -151,7 +181,7 @@ export default class InkStonePlugin extends Plugin {
   /** Validates settings, then starts the server (no-op when running). */
   async startServer(): Promise<StartResult> {
     if (this.server.status !== "running") {
-      const env = await validateEnvironment(this.settings);
+      const env = await this.validate();
       if (!env.ok) return { ok: false, kind: "env", message: env.problem };
     }
     try {
@@ -164,7 +194,7 @@ export default class InkStonePlugin extends Plugin {
   }
 
   async restartServer(): Promise<void> {
-    const env = await validateEnvironment(this.settings);
+    const env = await this.validate();
     if (!env.ok) {
       new Notice(`InkStone: ${env.problem}`);
       for (const v of this.previewViews()) v.showEnvProblem(env.problem);

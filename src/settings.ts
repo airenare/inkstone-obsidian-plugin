@@ -2,7 +2,6 @@ import { App, Notice, PluginSettingTab, Setting, TextComponent } from "obsidian"
 import {
   defaultPythonPath,
   folderFromPickedFile,
-  validateEnvironment,
 } from "./environment";
 import type InkStonePlugin from "./main";
 
@@ -137,7 +136,7 @@ export class InkStoneSettingTab extends PluginSettingTab {
 
   private async refreshStatus(): Promise<void> {
     this.statusEl.setText("Checking environment...");
-    const r = await validateEnvironment(this.plugin.settings);
+    const r = await this.plugin.validate();
     this.statusEl.setText(r.ok ? "Environment OK." : r.problem);
     this.statusEl.toggleClass("mod-warning", !r.ok);
   }

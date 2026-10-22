@@ -2,8 +2,8 @@ import { spawn as nodeSpawn, spawnSync } from "child_process";
 import { randomBytes } from "crypto";
 import { createServer } from "net";
 import { request } from "http";
-import { resolve as resolvePath } from "path";
 import { defaultPythonPath } from "./environment";
+import { resolveSiteFolder } from "./paths";
 import { getLoginShellPath } from "./shellEnv";
 import type { InkStoneSettings } from "./settings";
 
@@ -41,6 +41,8 @@ export interface ServerDeps {
   baseEnv: NodeJS.ProcessEnv;
   /** Registers last-chance cleanup; returns a function that removes it. */
   installExitHooks(cleanup: () => void): () => void;
+  /** The vault folder on disk (relative site folders resolve against it). */
+  vaultBasePath(): string | null;
 }
 
 export const OUTDATED_MESSAGE =
@@ -68,7 +70,7 @@ export function pickFreePort(): Promise<number> {
  * is left to `.env`.
  */
 export function buildServerEnv(
-  s: InkStoneSettings,
+  siteFolder: string,
   port: number,
   token: string,
   base: NodeJS.ProcessEnv,
@@ -76,7 +78,7 @@ export function buildServerEnv(
 ): NodeJS.ProcessEnv {
   return {
     ...base,
-    VAULT_PATH: resolvePath(s.siteFolder),
+    VAULT_PATH: siteFolder,
     PORT: String(port),
     ACCESS_TOKEN: token,
     SECRET_KEY: secretKey,
@@ -154,6 +156,7 @@ function realDeps(): ServerDeps {
     platform: process.platform,
     baseEnv: process.env,
     installExitHooks: installExitHooksReal,
+    vaultBasePath: () => null,
   };
 }
 
@@ -233,11 +236,19 @@ export class InkStoneServer {
     this._stderr = "";
     this.setStatus("starting");
     try {
+      const site = resolveSiteFolder(
+        this.settings.siteFolder,
+        d.vaultBasePath(),
+        d.platform,
+      );
+      if (!site) {
+        throw new Error("Site folder not set (or relative with no vault).");
+      }
       const port = await d.pickPort();
       if (cancelled()) throw cancelError();
       this.port = port;
       const baseUrl = `http://127.0.0.1:${port}`;
-      const env = buildServerEnv(this.settings, port, this.token, d.baseEnv);
+      const env = buildServerEnv(site, port, this.token, d.baseEnv);
       env.PATH = await d.getPath(d.platform);
       if (cancelled()) throw cancelError();
       const python =

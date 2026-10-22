@@ -150,3 +150,26 @@ describe("validateEnvironment python default", () => {
     );
   });
 });
+
+describe("validateEnvironment site folder resolution", () => {
+  it("resolves a relative site folder against the vault", async () => {
+    const dirExists = vi.fn(async () => true);
+    const r = await validateEnvironment(
+      { ...settings, siteFolder: "site" },
+      makeDeps({ dirExists, vaultBasePath: "/vault" }),
+    );
+    expect(r).toEqual({ ok: true });
+    expect(dirExists).toHaveBeenCalledWith("/vault/site");
+  });
+
+  it("refuses a relative site folder when the vault path is unknown", async () => {
+    const dirExists = vi.fn(async () => true);
+    const r = await validateEnvironment(
+      { ...settings, siteFolder: "site" },
+      makeDeps({ dirExists, vaultBasePath: null }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.problem).toContain("site");
+    expect(dirExists).not.toHaveBeenCalled();
+  });
+});

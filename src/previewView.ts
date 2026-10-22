@@ -1,12 +1,10 @@
 import {
-  FileSystemAdapter,
   FileView,
   ItemView,
   Notice,
   TFile,
   WorkspaceLeaf,
 } from "obsidian";
-import { resolve as resolvePath } from "path";
 import { GitPanel } from "./gitPanel";
 import { obsidianFetcher } from "./obsidianFetcher";
 import {
@@ -306,13 +304,12 @@ export class InkStonePreviewView extends ItemView {
     this.evaluate();
   }
 
-  private siteFolder(): string {
-    return resolvePath(this.plugin.settings.siteFolder);
+  private siteFolder(): string | null {
+    return this.plugin.siteFolderPath();
   }
 
   private vaultBase(): string | null {
-    const a = this.app.vault.adapter;
-    return a instanceof FileSystemAdapter ? a.getBasePath() : null;
+    return this.plugin.vaultBasePath();
   }
 
   /** Decide what to show for the active note and show it. */
@@ -328,9 +325,9 @@ export class InkStonePreviewView extends ItemView {
       return;
     }
     const vaultBase = this.vaultBase();
-    const rel = vaultBase
-      ? siteRelativePath(vaultBase, file.path, this.siteFolder())
-      : null;
+    const site = this.siteFolder();
+    const rel =
+      vaultBase && site ? siteRelativePath(vaultBase, file.path, site) : null;
     if (rel === null) {
       this.setPrivateBadge(false);
       this.targetPanel = true;
@@ -522,9 +519,11 @@ export class InkStonePreviewView extends ItemView {
     const target = decideEditorTarget(url, map);
     if (target.kind !== "open") return;
     const vaultBase = this.vaultBase();
-    const vaultPath = vaultBase
-      ? vaultPathForSiteFile(vaultBase, this.siteFolder(), target.file)
-      : null;
+    const site = this.siteFolder();
+    const vaultPath =
+      vaultBase && site
+        ? vaultPathForSiteFile(vaultBase, site, target.file)
+        : null;
     const file =
       vaultPath === null
         ? null

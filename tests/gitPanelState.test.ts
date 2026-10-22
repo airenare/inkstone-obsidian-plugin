@@ -30,6 +30,15 @@ describe("buttonStates", () => {
       push: { enabled: false, hint },
     });
   });
+
+  it("disables everything when no site folder is set", () => {
+    const hint = "Site folder not set";
+    expect(buttonStates({ kind: "no-site" })).toEqual({
+      pull: { enabled: false, hint },
+      commit: { enabled: false, hint },
+      push: { enabled: false, hint },
+    });
+  });
 });
 
 import { DIFF_MAX_BYTES, formatDiffForDisplay } from "../src/gitPanelState";

@@ -1,6 +1,12 @@
 import { Notice } from "obsidian";
-import { GitError, type GitChange, type GitService, type GitState } from "./git";
-import { buttonStates, formatDiffForDisplay, type ButtonState } from "./gitPanelState";
+import { GitError, type GitChange, type GitService } from "./git";
+import {
+  buttonStates,
+  formatDiffForDisplay,
+  NO_SITE,
+  type ButtonState,
+  type PanelGitState,
+} from "./gitPanelState";
 
 export const DEFAULT_COMMIT_MESSAGE = "Update site content";
 const NOTICE_MAX = 200;
@@ -9,8 +15,11 @@ const SSH_HINT =
   "or host-key prompt.";
 
 export interface GitPanelOptions {
-  /** A service for the current site folder (the setting can change). */
-  getService: () => GitService;
+  /**
+   * A service for the current site folder (the setting can change), or
+   * null when no usable (absolute) site folder is set.
+   */
+  getService: () => GitService | null;
   /** Called after a successful pull: files on disk changed. */
   onPulled: () => Promise<void> | void;
 }
@@ -35,7 +44,7 @@ function truncate(s: string): string {
 /** Collapsible git section: changed files, diff, commit, pull, push. */
 export class GitPanel {
   readonly el: HTMLDetailsElement;
-  private state: GitState = { kind: "not-repo" };
+  private state: PanelGitState = { kind: "no-site" };
   private changes: GitChange[] = [];
   /** Paths the user unchecked; everything else is checked by default. */
   private unchecked = new Set<string>();
@@ -148,8 +157,9 @@ export class GitPanel {
   private async load(): Promise<void> {
     try {
       const svc = this.opts.getService();
-      this.state = await svc.state();
-      this.changes = this.state.kind === "repo" ? await svc.changes() : [];
+      this.state = svc ? await svc.state() : { kind: "no-site" };
+      this.changes =
+        svc && this.state.kind === "repo" ? await svc.changes() : [];
     } catch (e) {
       this.showError(e);
       this.changes = [];
@@ -167,7 +177,9 @@ export class GitPanel {
     this.setBusy(true);
     this.clearError();
     try {
-      await fn(this.opts.getService());
+      const svc = this.opts.getService();
+      if (!svc) throw new Error(NO_SITE);
+      await fn(svc);
     } catch (e) {
       this.showError(e);
     }
@@ -217,16 +229,18 @@ export class GitPanel {
     this.applyButton(this.commitBtn, s.commit, why);
     this.applyButton(this.pushBtn, s.push);
     this.refreshBtn.disabled = this.busy;
-    this.msgInput.disabled = this.state.kind === "not-repo";
+    this.msgInput.disabled = this.state.kind !== "repo";
     this.inlineEl.setText(this.busy ? "Working..." : why);
   }
 
   private render(): void {
     const st = this.state;
     this.statusEl.setText(
-      st.kind === "not-repo"
-        ? "Folder is not a git repo"
-        : `${st.branch ?? "detached HEAD"}${st.hasRemote ? "" : " (no remote)"}`,
+      st.kind === "no-site"
+        ? NO_SITE
+        : st.kind === "not-repo"
+          ? "Folder is not a git repo"
+          : `${st.branch ?? "detached HEAD"}${st.hasRemote ? "" : " (no remote)"}`,
     );
     this.listEl.empty();
     if (st.kind === "repo" && this.changes.length === 0) {
@@ -269,7 +283,9 @@ export class GitPanel {
     if (seq !== this.diffSeq || this.disposed) return;
     this.setBusy(true);
     try {
-      const diff = await this.opts.getService().diff(path);
+      const svc = this.opts.getService();
+      if (!svc) throw new Error(NO_SITE);
+      const diff = await svc.diff(path);
       if (seq === this.diffSeq) this.showDiff(diff);
     } catch (e) {
       if (seq === this.diffSeq) {

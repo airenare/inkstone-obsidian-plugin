@@ -66,7 +66,12 @@ export class GitService {
   constructor(
     private readonly siteFolder: string,
     private readonly opts: GitServiceOptions = {},
-  ) {}
+  ) {
+    // Git must never run in the process cwd (an unrelated repo).
+    if (!siteFolder || !nodePath.isAbsolute(siteFolder)) {
+      throw new GitError("Site folder not set (needs an absolute path).");
+    }
+  }
 
   async state(): Promise<GitState> {
     const probe = await this.run(["rev-parse", "--is-inside-work-tree"], {

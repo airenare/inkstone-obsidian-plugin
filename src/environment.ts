@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promises as fs } from "fs";
+import { resolveSiteFolder } from "./paths";
 import type { InkStoneSettings } from "./settings";
 
 export type EnvironmentResult = { ok: true } | { ok: false; problem: string };
@@ -14,6 +15,11 @@ export interface EnvironmentDeps {
   fileExists(path: string): Promise<boolean>;
   /** Runs a command; rejects if it cannot be launched. */
   run(command: string, args: string[]): Promise<RunResult>;
+  /**
+   * The vault's folder on disk; relative site folders resolve against it.
+   * Null or absent: relative site folders are refused.
+   */
+  vaultBasePath?: string | null;
 }
 
 export function defaultPythonPath(
@@ -88,9 +94,19 @@ export async function validateEnvironment(
   if (!s.siteFolder.trim()) {
     return fail("No site folder is set. Choose the folder that holds your site.");
   }
-  if (!(await deps.dirExists(s.siteFolder))) {
+  const site = resolveSiteFolder(
+    s.siteFolder,
+    deps.vaultBasePath ?? null,
+    process.platform,
+  );
+  if (!site) {
     return fail(
-      `The site folder "${s.siteFolder}" does not exist. Choose an existing folder.`,
+      `The site folder "${s.siteFolder}" is relative, but the vault folder is unknown. Use an absolute path.`,
+    );
+  }
+  if (!(await deps.dirExists(site))) {
+    return fail(
+      `The site folder "${site}" does not exist. Choose an existing folder.`,
     );
   }
 
