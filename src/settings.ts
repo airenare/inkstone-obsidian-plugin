@@ -1,5 +1,9 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
-import { defaultPythonPath, validateEnvironment } from "./environment";
+import { App, Notice, PluginSettingTab, Setting, TextComponent } from "obsidian";
+import {
+  defaultPythonPath,
+  folderFromPickedFile,
+  validateEnvironment,
+} from "./environment";
 import type InkStonePlugin from "./main";
 
 export interface InkStoneSettings {
@@ -18,6 +22,7 @@ export const DEFAULT_SETTINGS: InkStoneSettings = {
 
 export class InkStoneSettingTab extends PluginSettingTab {
   private plugin: InkStonePlugin;
+  private pythonText: TextComponent | undefined;
   private statusEl!: HTMLElement;
   private timer: number | undefined;
 
@@ -59,12 +64,13 @@ export class InkStoneSettingTab extends PluginSettingTab {
       .setDesc(
         "Defaults to the venv inside the checkout. Must have InkStone's requirements installed.",
       )
-      .addText((t) =>
-        t
+      .addText((t) => {
+        this.pythonText = t;
+        return t
           .setPlaceholder(defaultPythonPath(s.inkstoneCheckout || "<checkout>", process.platform))
           .setValue(s.pythonPath)
-          .onChange((v) => this.applyChange({ pythonPath: v })),
-      );
+          .onChange((v) => this.applyChange({ pythonPath: v }));
+      });
 
     new Setting(containerEl)
       .setName("Start server automatically")
@@ -87,15 +93,31 @@ export class InkStoneSettingTab extends PluginSettingTab {
     input.type = "file";
     input.setAttribute("webkitdirectory", "");
     input.onchange = () => {
-      const file = input.files?.[0] as (File & { path?: string }) | undefined;
-      const rel = file?.webkitRelativePath.split("/")[0];
-      if (file?.path && rel) {
-        const idx = file.path.lastIndexOf(rel);
-        this.applyChange({ siteFolder: file.path.slice(0, idx + rel.length) });
+      const file = input.files?.[0];
+      const picked = file ? this.pathOf(file) : "";
+      if (file && picked) {
+        const dir = folderFromPickedFile(picked, file.webkitRelativePath);
+        this.applyChange({ siteFolder: dir });
         this.display();
+      } else {
+        new Notice(
+          "Couldn't read the folder path; type it into the field instead.",
+        );
       }
     };
     input.click();
+  }
+
+  private pathOf(file: File): string {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const electron = require("electron");
+      const p = electron?.webUtils?.getPathForFile?.(file);
+      if (p) return p;
+    } catch {
+      // not available; fall through
+    }
+    return (file as File & { path?: string }).path ?? "";
   }
 
   private applyChange(patch: Partial<InkStoneSettings>, rederive = false): void {
@@ -106,6 +128,7 @@ export class InkStoneSettingTab extends PluginSettingTab {
       s.pythonPath = s.inkstoneCheckout
         ? defaultPythonPath(s.inkstoneCheckout, process.platform)
         : "";
+      this.pythonText?.setValue(s.pythonPath);
     }
     void this.plugin.saveSettings();
     window.clearTimeout(this.timer);

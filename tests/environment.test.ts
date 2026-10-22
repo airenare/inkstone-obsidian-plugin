@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   defaultPythonPath,
+  folderFromPickedFile,
   validateEnvironment,
   type EnvironmentDeps,
 } from "../src/environment";
@@ -111,5 +112,41 @@ describe("validateEnvironment", () => {
       expect(r.problem).toContain("flask");
       expect(r.problem).toContain("pip install");
     }
+  });
+});
+
+describe("folderFromPickedFile", () => {
+  it("returns the picked folder", () => {
+    expect(folderFromPickedFile("/a/notes/x.md", "notes/x.md")).toBe(
+      "/a/notes",
+    );
+  });
+  it("handles a repeated folder name", () => {
+    expect(
+      folderFromPickedFile("/a/notes/sub/notes/x.md", "notes/sub/notes/x.md"),
+    ).toBe("/a/notes");
+  });
+  it("handles Windows-style paths", () => {
+    expect(
+      folderFromPickedFile(
+        "C:\\a\\notes\\sub\\x.md",
+        "notes/sub/x.md",
+      ),
+    ).toBe("C:\\a\\notes");
+  });
+});
+
+describe("validateEnvironment python default", () => {
+  it("falls back to the default interpreter when pythonPath is empty", async () => {
+    const run = vi.fn(async () => ({ code: 0, stderr: "" }));
+    const r = await validateEnvironment(
+      { ...settings, pythonPath: "" },
+      makeDeps({ run }),
+    );
+    expect(r).toEqual({ ok: true });
+    expect(run).toHaveBeenCalledWith(
+      defaultPythonPath("/inkstone", process.platform),
+      ["-c", "import flask"],
+    );
   });
 });

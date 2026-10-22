@@ -27,6 +27,22 @@ export function defaultPythonPath(
   return `${base}/.venv/bin/python3`;
 }
 
+/**
+ * Derives the picked folder from the first file of a directory input.
+ * `path` is the file's absolute path; `webkitRelativePath` is
+ * "<folder>/.../<file>" with forward slashes. Both end with the same number
+ * of characters, so strip that suffix and re-add the folder name.
+ */
+export function folderFromPickedFile(
+  path: string,
+  webkitRelativePath: string,
+): string {
+  const rel = webkitRelativePath.split("/")[0];
+  return (
+    path.slice(0, path.length - webkitRelativePath.length) + rel
+  );
+}
+
 export const realDeps: EnvironmentDeps = {
   async dirExists(path) {
     try {
@@ -91,22 +107,21 @@ export async function validateEnvironment(
     );
   }
 
-  if (!s.pythonPath.trim()) {
-    return fail("No Python executable is set. Enter the path to your InkStone venv's Python.");
-  }
+  const python =
+    s.pythonPath.trim() || defaultPythonPath(s.inkstoneCheckout, process.platform);
   let result: RunResult;
   try {
-    result = await deps.run(s.pythonPath, ["-c", "import flask"]);
+    result = await deps.run(python, ["-c", "import flask"]);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return fail(
-      `Could not run Python at "${s.pythonPath}" (${msg}). Check the path, or create the venv in your InkStone checkout.`,
+      `Could not run Python at "${python}" (${msg}). Check the path, or create the venv in your InkStone checkout.`,
     );
   }
   if (result.code !== 0) {
     const detail = result.stderr.trim().split("\n").pop() ?? "";
     return fail(
-      `Python at "${s.pythonPath}" cannot import flask${detail ? ` (${detail})` : ""}. Run "${s.pythonPath} -m pip install -r requirements.txt" in your InkStone checkout.`,
+      `Python at "${python}" cannot import flask${detail ? ` (${detail})` : ""}. Run "${python} -m pip install -r requirements.txt" in your InkStone checkout.`,
     );
   }
   return { ok: true };
