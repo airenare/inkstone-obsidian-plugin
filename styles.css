@@ -1,1 +1,106 @@
 /* InkStone */
+
+.workspace-leaf-content .view-content.inkstone-preview {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.inkstone-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-1) var(--size-4-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex: 0 0 auto;
+}
+
+.inkstone-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--text-faint);
+}
+.inkstone-dot.is-starting {
+  background: var(--color-yellow);
+}
+.inkstone-dot.is-running {
+  background: var(--color-green);
+}
+.inkstone-dot.is-crashed {
+  background: var(--color-red);
+}
+
+.inkstone-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+}
+
+.inkstone-badge {
+  flex: 0 0 auto;
+  font-size: var(--font-ui-smaller);
+  padding: 0 var(--size-4-1);
+  border-radius: var(--radius-s);
+  color: var(--text-warning);
+  border: 1px solid currentColor;
+}
+
+.inkstone-owner {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  flex: 0 0 auto;
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+
+.inkstone-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.inkstone-webview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+/* Hide, don't unmount: the page stays loaded behind the panel. */
+.inkstone-stage.has-panel .inkstone-webview {
+  visibility: hidden;
+}
+
+.inkstone-panel {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: var(--size-4-6);
+  background: var(--background-primary);
+}
+.inkstone-panel.is-error h3 {
+  color: var(--text-error);
+}
+
+.inkstone-stderr {
+  max-height: 50vh;
+  overflow: auto;
+  padding: var(--size-4-2);
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+  user-select: text;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+}
+
+.inkstone-actions {
+  display: flex;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-3);
+}
