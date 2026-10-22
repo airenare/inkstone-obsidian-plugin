@@ -20,9 +20,11 @@ Edit a note on the left. See the real page on the right.
 
 ## Install
 
-**BRAT.** Add `airenare/inkstone-obsidian-plugin` in the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin. It installs the latest release and keeps it updated.
+**From Obsidian (recommended).** Open Settings > Community plugins, turn off Restricted mode if it's on, choose **Browse**, search for **InkStone Preview**, then **Install** and **Enable**. You can also open the plugin's [page in the community directory](https://community.obsidian.md/plugins/inkstone-preview) and click **Add to Obsidian**.
 
 **Manual.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/airenare/inkstone-obsidian-plugin/releases/latest) into `<your vault>/.obsidian/plugins/inkstone-preview/`, then enable **InkStone Preview** under Settings > Community plugins.
+
+**BRAT (for betas).** To try a pre-release before it reaches the store, add `airenare/inkstone-obsidian-plugin` in the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin. Most people don't need this.
 
 ## Quick start
 
@@ -108,7 +110,6 @@ Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 
 ## Known limitations
 
-- Links with `target="_blank"` (social links, the footer, some canvas links) do nothing in the preview.
 - On InkStone 1.57.x, a hard-killed Obsidian (crash or force-quit) can leave the local server running until you end it yourself. InkStone 1.58.0 and newer shut the server down with Obsidian in every case.
 - A `.env` file in the InkStone checkout that sets `URL_PATH_PREFIX` isn't supported.
 - Linux and Windows haven't been run live yet. Reports are welcome.
