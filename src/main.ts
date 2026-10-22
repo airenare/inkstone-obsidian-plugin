@@ -6,6 +6,7 @@ import {
   createReloadScheduler,
   type ReloadScheduler,
 } from "./autoReload";
+import { GitService } from "./git";
 import { validateEnvironment } from "./environment";
 import { InkStonePreviewView, VIEW_TYPE_PREVIEW } from "./previewView";
 import { InkStoneServer, type ServerStatus } from "./server";
@@ -14,6 +15,8 @@ import {
   InkStoneSettings,
   InkStoneSettingTab,
 } from "./settings";
+
+const GIT_REFRESH_DEBOUNCE_MS = 1000;
 
 export type StartResult =
   | { ok: true; baseUrl: string }
@@ -25,6 +28,7 @@ export default class InkStonePlugin extends Plugin {
   /** Why the last start attempt failed; "" after a successful start. */
   lastStartError = "";
   private reloader: ReloadScheduler | null = null;
+  private gitRefresher: ReloadScheduler | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -40,6 +44,9 @@ export default class InkStonePlugin extends Plugin {
       () => this.flushReload(),
       RELOAD_DEBOUNCE_MS,
     );
+    this.gitRefresher = createReloadScheduler(async () => {
+      await Promise.all(this.previewViews().map((v) => v.refreshGit()));
+    }, GIT_REFRESH_DEBOUNCE_MS);
     const { vault } = this.app;
     this.registerEvent(
       vault.on("modify", (f) => this.onVaultChange(f.path)),
@@ -87,18 +94,21 @@ export default class InkStonePlugin extends Plugin {
   onunload(): void {
     this.reloader?.dispose();
     this.reloader = null;
+    this.gitRefresher?.dispose();
+    this.gitRefresher = null;
     // stop() kills the process tree synchronously before its first await.
     void this.server?.stop();
   }
 
   private onVaultChange(...paths: string[]): void {
-    if (this.server.status !== "running") return;
     const adapter = this.app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) return;
     const site = resolvePath(this.settings.siteFolder);
-    if (pathsToNotify(adapter.getBasePath(), site, paths)) {
-      this.reloader?.notify();
-    }
+    if (!pathsToNotify(adapter.getBasePath(), site, paths)) return;
+    // Git panel refresh is independent of the server and is a no-op
+    // while the panel is collapsed.
+    this.gitRefresher?.notify();
+    if (this.server.status === "running") this.reloader?.notify();
   }
 
   private async flushReload(): Promise<void> {
@@ -110,6 +120,11 @@ export default class InkStonePlugin extends Plugin {
         console.warn("InkStone: auto-reload failed for a preview");
       }
     }
+  }
+
+  /** A git service for the current site folder. */
+  gitService(): GitService {
+    return new GitService(resolvePath(this.settings.siteFolder));
   }
 
   private previewViews(): InkStonePreviewView[] {

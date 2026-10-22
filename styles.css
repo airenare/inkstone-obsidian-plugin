@@ -104,3 +104,87 @@
   gap: var(--size-4-2);
   margin-top: var(--size-4-3);
 }
+
+/* ---- git panel ---- */
+.inkstone-git {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+}
+.inkstone-git > summary {
+  padding: var(--size-4-1) var(--size-4-3);
+  cursor: pointer;
+}
+.inkstone-git-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding: 0 var(--size-4-3) var(--size-4-3);
+  max-height: 50%;
+  overflow: auto;
+}
+.inkstone-git-head,
+.inkstone-git-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+.inkstone-git-status {
+  flex: 1 1 auto;
+  color: var(--text-muted);
+}
+.inkstone-git-message {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.inkstone-git button.is-disabled,
+.inkstone-git button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.inkstone-git-list {
+  max-height: 140px;
+  overflow: auto;
+}
+.inkstone-git-file {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: 1px 0;
+}
+.inkstone-git-file.is-selected {
+  background: var(--background-modifier-hover);
+}
+.inkstone-git-letter {
+  width: 1.5em;
+  font-family: var(--font-monospace);
+  color: var(--text-muted);
+}
+.inkstone-git-name {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.inkstone-git-empty,
+.inkstone-git-inline {
+  color: var(--text-muted);
+}
+.inkstone-git-diff,
+.inkstone-git-error pre {
+  max-height: 200px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--size-4-2);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+  user-select: text;
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+}
+.inkstone-git-error pre {
+  color: var(--text-error);
+}
+.inkstone-git-hint {
+  margin-top: var(--size-4-1);
+  color: var(--text-muted);
+}

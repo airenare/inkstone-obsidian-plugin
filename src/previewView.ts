@@ -7,6 +7,7 @@ import {
   WorkspaceLeaf,
 } from "obsidian";
 import { resolve as resolvePath } from "path";
+import { GitPanel } from "./gitPanel";
 import { obsidianFetcher } from "./obsidianFetcher";
 import {
   decideAfterSave,
@@ -110,6 +111,7 @@ export class InkStonePreviewView extends ItemView {
   private restartBtn!: HTMLButtonElement;
   private stageEl!: HTMLElement;
   private panelEl!: HTMLElement;
+  private gitPanel: GitPanel | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: InkStonePlugin) {
     super(leaf);
@@ -149,6 +151,8 @@ export class InkStonePreviewView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.gitPanel?.dispose();
+    this.gitPanel = null;
     this.webview?.remove();
     this.webview = null;
   }
@@ -248,6 +252,11 @@ export class InkStonePreviewView extends ItemView {
       error: true,
       actions: [{ label: "Retry", onClick: () => void this.connect() }],
     });
+  }
+
+  /** Vault files in the site folder changed; update the git panel. */
+  refreshGit(): Promise<void> {
+    return this.gitPanel?.refreshIfOpen() ?? Promise.resolve();
   }
 
   /** Reload the page currently shown in the webview. */
@@ -612,6 +621,13 @@ export class InkStonePreviewView extends ItemView {
       void this.plugin.restartServer(),
     );
     this.restartBtn.hide();
+
+    this.gitPanel = new GitPanel(root, {
+      getService: () => this.plugin.gitService(),
+      // Files changed on disk: refetch the map and reload in place. The
+      // vault events fire too; the scheduler collapses them.
+      onPulled: () => this.refreshAndReload(),
+    });
 
     this.stageEl = root.createDiv({ cls: "inkstone-stage" });
     this.panelEl = this.stageEl.createDiv({ cls: "inkstone-panel" });
