@@ -86,19 +86,21 @@ export class InkStoneSettingTab extends PluginSettingTab {
         },
       },
       {
-        name: "Checkout folder",
-        desc: "The local clone of the engine: the folder with app.py.",
+        name: "InkStone folder",
+        desc: "Your local copy of the project that renders the site: the folder with app.py.",
         aliases: ["inkstone", "engine", "repository", "clone"],
         render: (setting) => {
           setting.addText((t) => {
             this.checkoutText = t;
-            t.setValue(s.inkstoneCheckout).onChange((v) =>
-              this.applyChange({ inkstoneCheckout: v }, true),
-            );
+            t.setPlaceholder("Where you cloned it, the folder with app.py")
+              .setValue(s.inkstoneCheckout)
+              .onChange((v) =>
+                this.applyChange({ inkstoneCheckout: v }, true),
+              );
           });
           setting.addButton((b) =>
             b.setButtonText("Browse").onClick(() => {
-              void this.browse("Choose the checkout folder", (dir) => {
+              void this.browse("Choose the InkStone folder", (dir) => {
                 this.checkoutText?.setValue(dir);
                 this.applyChange({ inkstoneCheckout: dir }, true);
               });
@@ -109,14 +111,14 @@ export class InkStoneSettingTab extends PluginSettingTab {
       {
         name: "Python executable",
         desc:
-          "Defaults to the venv inside the checkout. Must have the " +
+          "Defaults to the venv inside the InkStone folder. Must have the " +
           "engine's requirements installed.",
         aliases: ["venv", "interpreter"],
         render: (setting) => {
           setting.addText((t) => {
             this.pythonText = t;
             t.setPlaceholder(
-              defaultPythonPath(s.inkstoneCheckout || "<checkout>", process.platform),
+              defaultPythonPath(s.inkstoneCheckout || "<InkStone folder>", process.platform),
             )
               .setValue(s.pythonPath)
               .onChange((v) => this.applyChange({ pythonPath: v }));

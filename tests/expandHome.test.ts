@@ -5,8 +5,8 @@ import type { InkStoneSettings } from "../src/settings";
 describe("expandHome", () => {
   it("expands a bare tilde and tilde-slash paths", () => {
     expect(expandHome("~", "/Users/a")).toBe("/Users/a");
-    expect(expandHome("~/GitHubRepos/InkStone", "/Users/a")).toBe(
-      "/Users/a/GitHubRepos/InkStone",
+    expect(expandHome("~/code/inkstone", "/Users/a")).toBe(
+      "/Users/a/code/inkstone",
     );
   });
 
@@ -32,14 +32,14 @@ describe("expandSettingsPaths", () => {
   it("expands site folder, checkout and python path only", () => {
     const s: InkStoneSettings = {
       siteFolder: "~/site",
-      inkstoneCheckout: "~/InkStone",
-      pythonPath: "~/InkStone/.venv/bin/python3",
+      inkstoneCheckout: "~/inkstone",
+      pythonPath: "~/inkstone/.venv/bin/python3",
       autoStartServer: true,
     };
     expect(expandSettingsPaths(s, "/Users/a")).toEqual({
       siteFolder: "/Users/a/site",
-      inkstoneCheckout: "/Users/a/InkStone",
-      pythonPath: "/Users/a/InkStone/.venv/bin/python3",
+      inkstoneCheckout: "/Users/a/inkstone",
+      pythonPath: "/Users/a/inkstone/.venv/bin/python3",
       autoStartServer: true,
     });
   });
