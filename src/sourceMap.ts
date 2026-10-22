@@ -20,14 +20,14 @@ function safeDecode(s: string): string {
 export function normalizeUrl(u: string): string {
   let s = u.trim().replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*/, "");
   s = s.replace(/[?#].*$/s, "");
-  s = safeDecode(s);
+  s = safeDecode(s).normalize("NFC");
   s = s.replace(/\/+$/, "");
   if (s === "" && u.trim() !== "") return "/";
   return s;
 }
 
 function toSlashes(p: string): string {
-  return p.replace(/\\/g, "/");
+  return p.replace(/\\/g, "/").normalize("NFC");
 }
 
 function fixDrive(p: string): string {
@@ -73,21 +73,39 @@ export class SourceMap {
   }
 }
 
+/** Minimal fetch-like function; lets tests and Obsidian inject a transport. */
+export type Fetcher = (
+  url: string,
+) => Promise<{ status: number; text(): Promise<string> }>;
+
+/**
+ * Plugin code must pass a fetcher built on Obsidian's `requestUrl`: the
+ * default global `fetch` is blocked by CORS in the renderer because the
+ * InkStone server sends no CORS headers.
+ */
 export async function fetchSourceMap(
   baseUrl: string,
-  fetchFn: typeof fetch = fetch,
+  fetcher: Fetcher = fetch,
 ): Promise<SourceMap> {
   const url = baseUrl.replace(/\/+$/, "") + "/__inkstone/source-map";
-  const res = await fetchFn(url);
+  let res: { status: number; text(): Promise<string> };
+  try {
+    res = await fetcher(url);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Couldn't reach the InkStone server at ${baseUrl}; is it running? (${msg})`,
+    );
+  }
   if (res.status === 404) {
     throw new Error(`Source map endpoint not found: ${MIN_VERSION_HINT}`);
   }
-  if (!res.ok) {
+  if (res.status < 200 || res.status >= 300) {
     throw new Error(`Source map request failed with status ${res.status}`);
   }
   let data: any;
   try {
-    data = await res.json();
+    data = JSON.parse(await res.text());
   } catch {
     throw new Error("Source map response was invalid JSON");
   }

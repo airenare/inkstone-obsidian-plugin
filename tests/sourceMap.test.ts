@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fetchSourceMap,
+  type Fetcher,
   normalizeFile,
   normalizeUrl,
   SourceMap,
@@ -83,19 +84,32 @@ describe("normalizeFile", () => {
 });
 
 describe("fetchSourceMap", () => {
-  const res = (status: number, body: unknown, text?: string) =>
-    (async () => ({
+  const res = (status: number, body: unknown, raw?: string): Fetcher =>
+    async () => ({
       status,
-      ok: status >= 200 && status < 300,
-      json: async () => {
-        if (text !== undefined) throw new Error("bad json");
-        return body;
-      },
-    })) as unknown as typeof fetch;
+      text: async () => (raw !== undefined ? raw : JSON.stringify(body)),
+    });
 
   it("parses entries", async () => {
     const m = await fetchSourceMap("http://h:1/", res(200, { version: "1.57.0", files: entries }));
     expect(m.fileForUrl("/blog/simple-post")?.file).toBe("blog/simple-post.md");
+  });
+  it("uses the injected fetcher with the endpoint url", async () => {
+    const calls: string[] = [];
+    const f: Fetcher = async (u) => {
+      calls.push(u);
+      return { status: 200, text: async () => JSON.stringify({ version: "1", files: [] }) };
+    };
+    await fetchSourceMap("http://h:1/", f);
+    expect(calls).toEqual(["http://h:1/__inkstone/source-map"]);
+  });
+  it("wraps a rejecting fetcher in a friendly error", async () => {
+    const f: Fetcher = async () => {
+      throw new Error("ECONNREFUSED");
+    };
+    await expect(fetchSourceMap("http://h:1", f)).rejects.toThrow(
+      /Couldn't reach the InkStone server at http:\/\/h:1; is it running\?.*ECONNREFUSED/,
+    );
   });
   it("404 mentions update", async () => {
     await expect(fetchSourceMap("http://h", res(404, {}))).rejects.toThrow(
@@ -106,5 +120,34 @@ describe("fetchSourceMap", () => {
     await expect(fetchSourceMap("http://h", res(500, {}))).rejects.toThrow(/500/);
     await expect(fetchSourceMap("http://h", res(200, {}, "x"))).rejects.toThrow(/invalid/i);
     await expect(fetchSourceMap("http://h", res(200, { nope: 1 }))).rejects.toThrow(/invalid/i);
+  });
+});
+
+describe("unicode normalization", () => {
+  const nfc = "й ё".normalize("NFC");
+  const nfd = "й ё".normalize("NFD");
+  it("sanity: forms differ", () => expect(nfc).not.toBe(nfd));
+  it("fileForUrl: NFD encoded url vs NFC map", () => {
+    const m = new SourceMap([
+      { file: `blog/${nfc}.md`, url: `/blog/${nfc}`, published: true, private: false },
+    ]);
+    expect(m.fileForUrl("/blog/" + encodeURIComponent(nfd))?.file).toBe(`blog/${nfc}.md`);
+    expect(m.fileForUrl("/blog/" + nfd)?.file).toBe(`blog/${nfc}.md`);
+  });
+  it("urlForFile and normalizeFile: NFD file vs NFC map", () => {
+    const m = new SourceMap([
+      { file: `blog/${nfc}.md`, url: `/blog/${nfc}`, published: true, private: false },
+    ]);
+    expect(m.urlForFile(`blog/${nfd}.md`)?.url).toBe(`/blog/${nfc}`);
+    const rel = normalizeFile(`/a/site/blog/${nfd}.md`, "/a/site");
+    expect(rel).toBe(`blog/${nfc}.md`);
+    expect(m.urlForFile(rel!)?.url).toBe(`/blog/${nfc}`);
+  });
+  it("NFD map vs NFC lookup", () => {
+    const m = new SourceMap([
+      { file: `blog/${nfd}.md`, url: `/blog/${nfd}`, published: true, private: false },
+    ]);
+    expect(m.urlForFile(`blog/${nfc}.md`)).toBeDefined();
+    expect(m.fileForUrl(`/blog/${nfc}`)).toBeDefined();
   });
 });
