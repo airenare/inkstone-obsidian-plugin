@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promises as fs } from "fs";
-import { resolveSiteFolder } from "./paths";
+import { expandSettingsPaths, resolveSiteFolder } from "./paths";
 import type { InkStoneSettings } from "./settings";
 
 export type EnvironmentResult = { ok: true } | { ok: false; problem: string };
@@ -118,9 +118,10 @@ export const realDeps: EnvironmentDeps = {
 const MIN_TEXT = MIN_INKSTONE_VERSION.join(".");
 
 export async function validateEnvironment(
-  s: InkStoneSettings,
+  settings: InkStoneSettings,
   deps: EnvironmentDeps = realDeps,
 ): Promise<EnvironmentResult> {
+  const s = expandSettingsPaths(settings);
   const fail = (problem: string): EnvironmentResult => ({
     ok: false,
     problem,

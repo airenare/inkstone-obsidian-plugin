@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { createServer } from "net";
 import { request } from "http";
 import { effectivePythonPath } from "./environment";
-import { resolveSiteFolder } from "./paths";
+import { expandSettingsPaths, resolveSiteFolder } from "./paths";
 import { getLoginShellPath } from "./shellEnv";
 import type { InkStoneSettings } from "./settings";
 
@@ -243,8 +243,9 @@ export class InkStoneServer {
     this._stderr = "";
     this.setStatus("starting");
     try {
+      const settings = expandSettingsPaths(this.settings);
       const site = resolveSiteFolder(
-        this.settings.siteFolder,
+        settings.siteFolder,
         d.vaultBasePath(),
         d.platform,
       );
@@ -259,10 +260,10 @@ export class InkStoneServer {
       this.secrets = [env.SECRET_KEY ?? "", env.WEBHOOK_SECRET ?? ""];
       env.PATH = await d.getPath(d.platform);
       if (cancelled()) throw cancelError();
-      const python = effectivePythonPath(this.settings, d.platform);
+      const python = effectivePythonPath(settings, d.platform);
       d.log(`starting server on port ${port}`);
       const c = d.spawn(python, ["app.py"], {
-        cwd: this.settings.inkstoneCheckout,
+        cwd: settings.inkstoneCheckout,
         env,
         detached: d.platform !== "win32",
         windowsHide: true,
