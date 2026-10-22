@@ -15,6 +15,8 @@ export interface EnvironmentDeps {
   fileExists(path: string): Promise<boolean>;
   /** Runs a command; rejects if it cannot be launched. */
   run(command: string, args: string[]): Promise<RunResult>;
+  /** Reads a text file; rejects if it cannot be read. */
+  readFile(path: string): Promise<string>;
   /**
    * The vault's folder on disk; relative site folders resolve against it.
    * Null or absent: relative site folders are refused.
@@ -31,6 +33,33 @@ export function defaultPythonPath(
     return `${base}\\.venv\\Scripts\\python.exe`;
   }
   return `${base}/.venv/bin/python3`;
+}
+
+/** The interpreter to run: the trimmed setting, or the checkout's venv. */
+export function effectivePythonPath(
+  s: InkStoneSettings,
+  platform: NodeJS.Platform,
+): string {
+  return s.pythonPath.trim() || defaultPythonPath(s.inkstoneCheckout, platform);
+}
+
+export type Version = [number, number, number];
+
+/** The oldest InkStone with PORT support and the dev source-map API. */
+export const MIN_INKSTONE_VERSION: Version = [1, 57, 0];
+
+/** Parses "X.Y.Z" (optional leading "v", surrounding whitespace). */
+export function parseVersion(text: string): Version | null {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(text.trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+/** Negative, zero or positive, like a sort comparator. */
+export function compareVersions(a: Version, b: Version): number {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
 }
 
 /**
@@ -66,7 +95,8 @@ export const realDeps: EnvironmentDeps = {
   },
   run(command, args) {
     return new Promise((resolve, reject) => {
-      execFile(command, args, { timeout: 15000 }, (err, _out, stderr) => {
+      const opts = { timeout: 15000, windowsHide: true };
+      execFile(command, args, opts, (err, _out, stderr) => {
         if (!err) {
           resolve({ code: 0, stderr: String(stderr) });
         } else if (typeof (err as NodeJS.ErrnoException).code === "number") {
@@ -80,7 +110,12 @@ export const realDeps: EnvironmentDeps = {
       });
     });
   },
+  readFile(path) {
+    return fs.readFile(path, "utf8");
+  },
 };
+
+const MIN_TEXT = MIN_INKSTONE_VERSION.join(".");
 
 export async function validateEnvironment(
   s: InkStoneSettings,
@@ -123,8 +158,29 @@ export async function validateEnvironment(
     );
   }
 
-  const python =
-    s.pythonPath.trim() || defaultPythonPath(s.inkstoneCheckout, process.platform);
+  const versionFile = `${s.inkstoneCheckout.replace(/[\\/]+$/, "")}${sep}VERSION`;
+  let versionText: string;
+  try {
+    versionText = await deps.readFile(versionFile);
+  } catch {
+    return fail(
+      `No VERSION file found in "${s.inkstoneCheckout}". This plugin needs InkStone ${MIN_TEXT} or newer. Update the checkout (git pull).`,
+    );
+  }
+  const version = parseVersion(versionText);
+  if (!version) {
+    const shown = versionText.trim().slice(0, 40);
+    return fail(
+      `Couldn't read the InkStone version from VERSION ("${shown}"). This plugin needs InkStone ${MIN_TEXT} or newer.`,
+    );
+  }
+  if (compareVersions(version, MIN_INKSTONE_VERSION) < 0) {
+    return fail(
+      `InkStone ${version.join(".")} found; this plugin needs ${MIN_TEXT} or newer. Update the checkout (git pull).`,
+    );
+  }
+
+  const python = effectivePythonPath(s, process.platform);
   let result: RunResult;
   try {
     result = await deps.run(python, ["-c", "import flask"]);

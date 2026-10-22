@@ -65,6 +65,14 @@ describe("buildServerEnv", () => {
     expect(env.X).toBe("1");
   });
 
+  it("sets a random webhook secret on every call", () => {
+    const a = buildServerEnv("/site", 1, "t", { WEBHOOK_SECRET: "" });
+    const b = buildServerEnv("/site", 1, "t", {});
+    expect(a.WEBHOOK_SECRET).toMatch(/^[0-9a-f]{64}$/);
+    expect(b.WEBHOOK_SECRET).toMatch(/^[0-9a-f]{64}$/);
+    expect(a.WEBHOOK_SECRET).not.toBe(b.WEBHOOK_SECRET);
+  });
+
   it("generates a random secret key when none is given", () => {
     const a = buildServerEnv("/site", 1, "t", {});
     const b = buildServerEnv("/site", 1, "t", {});
@@ -129,6 +137,32 @@ describe("InkStoneServer", () => {
       await expect(server.start()).rejects.toThrow(/site folder/i);
     }
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("never keeps the secret key or webhook secret in stderr", async () => {
+    const { deps, child, spawn, log } = makeDeps();
+    const server = new InkStoneServer(settings, deps);
+    const p = server.start();
+    await p;
+    const env = (spawn.mock.calls[0] as any[])[2].env;
+    child.stderr.emit(
+      "data",
+      Buffer.from(`a ${env.SECRET_KEY} b ${env.WEBHOOK_SECRET}\n`),
+    );
+    expect(server.lastStderr).not.toContain(env.SECRET_KEY);
+    expect(server.lastStderr).not.toContain(env.WEBHOOK_SECRET);
+    expect(server.lastStderr).toContain("[redacted]");
+    expect(JSON.stringify(log.mock.calls)).not.toContain(env.WEBHOOK_SECRET);
+  });
+
+  it("trims the python path before spawning", async () => {
+    const { deps, spawn } = makeDeps();
+    const server = new InkStoneServer(
+      { ...settings, pythonPath: "  /opt/py  " },
+      deps,
+    );
+    await server.start();
+    expect(spawn.mock.calls[0][0]).toBe("/opt/py");
   });
 
   it("uses an explicit python path when set", async () => {

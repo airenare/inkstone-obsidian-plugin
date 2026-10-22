@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  compareVersions,
   defaultPythonPath,
+  effectivePythonPath,
   folderFromPickedFile,
+  parseVersion,
   validateEnvironment,
   type EnvironmentDeps,
 } from "../src/environment";
@@ -19,6 +22,7 @@ function makeDeps(overrides: Partial<EnvironmentDeps> = {}): EnvironmentDeps {
     dirExists: async () => true,
     fileExists: async () => true,
     run: async () => ({ code: 0, stderr: "" }),
+    readFile: async () => "1.57.0\n",
     ...overrides,
   };
 }
@@ -171,5 +175,87 @@ describe("validateEnvironment site folder resolution", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.problem).toContain("site");
     expect(dirExists).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseVersion / compareVersions", () => {
+  it("parses X.Y.Z with surrounding whitespace", () => {
+    expect(parseVersion(" 1.57.0\n")).toEqual([1, 57, 0]);
+    expect(parseVersion("v2.0.10")).toEqual([2, 0, 10]);
+  });
+  it("rejects anything else", () => {
+    expect(parseVersion("")).toBeNull();
+    expect(parseVersion("1.57")).toBeNull();
+    expect(parseVersion("abc")).toBeNull();
+    expect(parseVersion("1.57.0.1")).toBeNull();
+  });
+  it("compares numerically, not as strings", () => {
+    expect(compareVersions([1, 57, 0], [1, 57, 0])).toBe(0);
+    expect(compareVersions([1, 9, 0], [1, 57, 0])).toBeLessThan(0);
+    expect(compareVersions([1, 100, 0], [1, 57, 0])).toBeGreaterThan(0);
+    expect(compareVersions([2, 0, 0], [1, 99, 99])).toBeGreaterThan(0);
+    expect(compareVersions([1, 57, 1], [1, 57, 2])).toBeLessThan(0);
+  });
+});
+
+describe("validateEnvironment InkStone version", () => {
+  it("reads VERSION from the checkout root", async () => {
+    const readFile = vi.fn(async () => "1.60.2\n");
+    const r = await validateEnvironment(settings, makeDeps({ readFile }));
+    expect(r).toEqual({ ok: true });
+    expect(readFile).toHaveBeenCalledWith("/inkstone/VERSION");
+  });
+
+  it("rejects a checkout older than 1.57.0", async () => {
+    const run = vi.fn(async () => ({ code: 0, stderr: "" }));
+    const r = await validateEnvironment(
+      settings,
+      makeDeps({ readFile: async () => "1.56.3\n", run }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.problem).toContain("1.56.3");
+      expect(r.problem).toContain("1.57.0");
+      expect(r.problem).toContain("git pull");
+    }
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("reports a missing VERSION file", async () => {
+    const r = await validateEnvironment(
+      settings,
+      makeDeps({
+        readFile: async () => {
+          throw new Error("ENOENT");
+        },
+      }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.problem).toContain("VERSION");
+  });
+
+  it("reports an unparseable VERSION file", async () => {
+    const r = await validateEnvironment(
+      settings,
+      makeDeps({ readFile: async () => "garbage" }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.problem).toContain("VERSION");
+      expect(r.problem).toContain("garbage");
+    }
+  });
+});
+
+describe("effectivePythonPath", () => {
+  it("trims an explicit path", () => {
+    expect(
+      effectivePythonPath({ ...settings, pythonPath: "  /opt/py \n" }, "linux"),
+    ).toBe("/opt/py");
+  });
+  it("falls back to the venv default when blank", () => {
+    expect(
+      effectivePythonPath({ ...settings, pythonPath: "   " }, "darwin"),
+    ).toBe("/inkstone/.venv/bin/python3");
   });
 });

@@ -2,7 +2,7 @@ import { spawn as nodeSpawn, spawnSync } from "child_process";
 import { randomBytes } from "crypto";
 import { createServer } from "net";
 import { request } from "http";
-import { defaultPythonPath } from "./environment";
+import { effectivePythonPath } from "./environment";
 import { resolveSiteFolder } from "./paths";
 import { getLoginShellPath } from "./shellEnv";
 import type { InkStoneSettings } from "./settings";
@@ -82,6 +82,8 @@ export function buildServerEnv(
     PORT: String(port),
     ACCESS_TOKEN: token,
     SECRET_KEY: secretKey,
+    // Without a secret InkStone's /webhook runs `git pull` for anyone.
+    WEBHOOK_SECRET: randomBytes(32).toString("hex"),
     INKSTONE_DEV_API: "1",
   };
 }
@@ -166,6 +168,8 @@ export class InkStoneServer {
   readonly token = randomBytes(24).toString("hex");
   private _status: ServerStatus = "stopped";
   private _stderr = "";
+  /** Values never kept in captured stderr (token plus per-start secrets). */
+  private secrets: string[] = [];
   private _ownerUnlock = false;
   private listeners: Listener[] = [];
   private child: ChildLike | null = null;
@@ -208,7 +212,10 @@ export class InkStoneServer {
   }
 
   private appendStderr(chunk: Buffer): void {
-    const text = String(chunk).split(this.token).join("[redacted]");
+    let text = String(chunk);
+    for (const secret of [this.token, ...this.secrets]) {
+      if (secret) text = text.split(secret).join("[redacted]");
+    }
     this._stderr = (this._stderr + text).slice(-STDERR_LIMIT);
   }
 
@@ -249,11 +256,10 @@ export class InkStoneServer {
       this.port = port;
       const baseUrl = `http://127.0.0.1:${port}`;
       const env = buildServerEnv(site, port, this.token, d.baseEnv);
+      this.secrets = [env.SECRET_KEY ?? "", env.WEBHOOK_SECRET ?? ""];
       env.PATH = await d.getPath(d.platform);
       if (cancelled()) throw cancelError();
-      const python =
-        this.settings.pythonPath ||
-        defaultPythonPath(this.settings.inkstoneCheckout, d.platform);
+      const python = effectivePythonPath(this.settings, d.platform);
       d.log(`starting server on port ${port}`);
       const c = d.spawn(python, ["app.py"], {
         cwd: this.settings.inkstoneCheckout,

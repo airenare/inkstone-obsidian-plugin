@@ -12,6 +12,7 @@ import {
   type EnvironmentResult,
 } from "./environment";
 import { resolveSiteFolder } from "./paths";
+import { serverSettingsChanged } from "./settingsChange";
 import { InkStonePreviewView, VIEW_TYPE_PREVIEW } from "./previewView";
 import { InkStoneServer, type ServerStatus } from "./server";
 import {
@@ -21,6 +22,7 @@ import {
 } from "./settings";
 
 const GIT_REFRESH_DEBOUNCE_MS = 1000;
+const SETTINGS_RESTART_DEBOUNCE_MS = 1000;
 
 export type StartResult =
   | { ok: true; baseUrl: string }
@@ -33,6 +35,9 @@ export default class InkStonePlugin extends Plugin {
   lastStartError = "";
   private reloader: ReloadScheduler | null = null;
   private gitRefresher: ReloadScheduler | null = null;
+  private settingsRestarter: ReloadScheduler | null = null;
+  /** Settings as last saved; compared on save to spot server changes. */
+  private savedSettings: InkStoneSettings = { ...DEFAULT_SETTINGS };
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -53,6 +58,10 @@ export default class InkStonePlugin extends Plugin {
     this.gitRefresher = createReloadScheduler(async () => {
       await Promise.all(this.previewViews().map((v) => v.refreshGit()));
     }, GIT_REFRESH_DEBOUNCE_MS);
+    this.settingsRestarter = createReloadScheduler(
+      () => this.applyServerSettings(),
+      SETTINGS_RESTART_DEBOUNCE_MS,
+    );
     const { vault } = this.app;
     this.registerEvent(
       vault.on("modify", (f) => this.onVaultChange(f.path)),
@@ -102,6 +111,8 @@ export default class InkStonePlugin extends Plugin {
     this.reloader = null;
     this.gitRefresher?.dispose();
     this.gitRefresher = null;
+    this.settingsRestarter?.dispose();
+    this.settingsRestarter = null;
     // stop() kills the process tree synchronously before its first await.
     void this.server?.stop();
   }
@@ -196,10 +207,31 @@ export default class InkStonePlugin extends Plugin {
   async restartServer(): Promise<void> {
     const env = await this.validate();
     if (!env.ok) {
-      new Notice(`InkStone: ${env.problem}`);
-      for (const v of this.previewViews()) v.showEnvProblem(env.problem);
+      this.reportEnvProblem(env.problem);
       return;
     }
+    await this.restartValidated();
+  }
+
+  /** Server settings changed while it runs: restart with them. */
+  private async applyServerSettings(): Promise<void> {
+    const st = this.server.status;
+    if (st !== "running" && st !== "starting") return;
+    const env = await this.validate();
+    if (!env.ok) {
+      this.reportEnvProblem(env.problem);
+      return;
+    }
+    new Notice("Restarting InkStone server with the new settings");
+    await this.restartValidated();
+  }
+
+  private reportEnvProblem(problem: string): void {
+    new Notice(`InkStone: ${problem}`);
+    for (const v of this.previewViews()) v.showEnvProblem(problem);
+  }
+
+  private async restartValidated(): Promise<void> {
     try {
       await this.server.restart();
       this.lastStartError = "";
@@ -221,9 +253,16 @@ export default class InkStonePlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.savedSettings = { ...this.settings };
   }
 
   async saveSettings(): Promise<void> {
+    const changed = serverSettingsChanged(this.savedSettings, this.settings);
+    this.savedSettings = { ...this.settings };
     await this.saveData(this.settings);
+    const st = this.server?.status;
+    if (changed && (st === "running" || st === "starting")) {
+      this.settingsRestarter?.notify();
+    }
   }
 }
