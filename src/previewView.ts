@@ -1,3 +1,4 @@
+import { BLANK_LINK_SCRIPT } from "./blankLinks";
 import {
   FileView,
   ItemView,
@@ -26,6 +27,7 @@ export const VIEW_TYPE_PREVIEW = "inkstone-preview";
 /** The parts of Electron's <webview> element this view uses. */
 interface WebviewElement extends HTMLElement {
   loadURL(url: string): Promise<void>;
+  executeJavaScript(code: string): Promise<unknown>;
   reload(): void;
   stop(): void;
   getURL(): string;
@@ -397,7 +399,10 @@ export class InkStonePreviewView extends ItemView {
     wv.setAttribute("partition", this.partition);
     wv.setAttribute("src", url);
     wv.addEventListener("dom-ready", () => {
-      if (this.webview === wv) this.webviewReady = true;
+      if (this.webview !== wv) return;
+      this.webviewReady = true;
+      // target="_blank" links and window.open() need help in a webview.
+      wv.executeJavaScript(BLANK_LINK_SCRIPT).catch(() => undefined);
     });
     wv.addEventListener("will-navigate", (e) => {
       if (this.webview === wv) this.onWillNavigate((e as NavEvent).url);
