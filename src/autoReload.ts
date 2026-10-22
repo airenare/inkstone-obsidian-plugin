@@ -14,29 +14,60 @@ const defaultTimers: Timers = {
   clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
 };
 
-/** Collapses a burst of notify() calls into one onFlush after a quiet gap. */
+/**
+ * Collapses a burst of notify() calls into one onFlush after a quiet gap.
+ * Flushes never overlap: notify() calls that arrive while an async flush is
+ * running produce exactly one follow-up flush once it finishes.
+ */
 export class ReloadScheduler {
   private handle: unknown = null;
   private disposed = false;
+  private running = false;
+  private again = false;
 
   constructor(
-    private onFlush: () => void,
+    private onFlush: () => void | Promise<void>,
     private delayMs: number,
     private timers: Timers = defaultTimers,
   ) {}
 
   notify(): void {
     if (this.disposed) return;
+    if (this.running) {
+      this.again = true;
+      return;
+    }
     if (this.handle !== null) this.timers.clear(this.handle);
     this.handle = this.timers.set(() => {
       this.handle = null;
-      this.onFlush();
+      this.run();
     }, this.delayMs);
+  }
+
+  private run(): void {
+    let result: void | Promise<void>;
+    try {
+      result = this.onFlush();
+    } catch {
+      return;
+    }
+    if (!result) return; // synchronous flush: nothing in flight
+    this.running = true;
+    const done = (): void => {
+      this.running = false;
+      if (this.again && !this.disposed) {
+        this.again = false;
+        this.notify();
+      }
+    };
+    // A failed flush must not break later ones or the event loop.
+    result.then(done, done);
   }
 
   /** Cancel any pending flush; later notify() calls do nothing. */
   dispose(): void {
     this.disposed = true;
+    this.again = false;
     if (this.handle !== null) this.timers.clear(this.handle);
     this.handle = null;
   }

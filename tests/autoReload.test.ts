@@ -51,6 +51,62 @@ describe("ReloadScheduler", () => {
   });
 });
 
+describe("ReloadScheduler in-flight guard", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("runs exactly one follow-up for notifies during a flush, no overlap", async () => {
+    let active = 0;
+    let maxActive = 0;
+    let calls = 0;
+    let release: () => void = () => {};
+    const flush = vi.fn(async () => {
+      calls++;
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((r) => (release = r));
+      active--;
+    });
+    const s = new ReloadScheduler(flush, 300);
+    s.notify();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(calls).toBe(1);
+    // Several notifies while the first flush is still in flight.
+    s.notify();
+    await vi.advanceTimersByTimeAsync(1000);
+    s.notify();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(1);
+    release();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(calls).toBe(2);
+    release();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(calls).toBe(2);
+    expect(maxActive).toBe(1);
+  });
+
+  it("does not follow up when nothing arrived during the flush", async () => {
+    const flush = vi.fn(async () => {});
+    const s = new ReloadScheduler(flush, 300);
+    s.notify();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+
+  it("survives a rejecting flush and still follows up", async () => {
+    const flush = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const s = new ReloadScheduler(flush, 300);
+    s.notify();
+    await vi.advanceTimersByTimeAsync(300);
+    s.notify();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(flush).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("pathsToNotify", () => {
   const vault = "/home/me/vault";
   it("accepts a file inside the site folder", () => {

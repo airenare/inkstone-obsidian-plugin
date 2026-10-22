@@ -9,6 +9,7 @@ import {
 import { resolve as resolvePath } from "path";
 import { obsidianFetcher } from "./obsidianFetcher";
 import {
+  decideAfterSave,
   decideEditorTarget,
   decidePreviewTarget,
   displayUrl,
@@ -182,38 +183,58 @@ export class InkStonePreviewView extends ItemView {
     }
   }
 
-  /** Refetch the source map and re-evaluate the current target. */
-  async refreshMap(): Promise<void> {
+  /**
+   * Fetch the source map for the current server. Null when there is no
+   * server, the request failed (the error panel is shown), or a newer
+   * fetch superseded this one.
+   */
+  private async fetchMap(): Promise<SourceMap | null> {
     const base = this.baseUrl;
-    if (!base) return;
+    if (!base) return null;
     const seq = ++this.mapSeq;
     let map: SourceMap;
     try {
       map = await fetchSourceMap(base, obsidianFetcher);
     } catch (e) {
-      if (seq !== this.mapSeq) return;
+      if (seq !== this.mapSeq) return null;
       this.showPanel({
         title: "Couldn't load the InkStone source map.",
         body: e instanceof Error ? e.message : String(e),
         error: true,
         actions: [{ label: "Retry", onClick: () => void this.refreshMap() }],
       });
-      return;
+      return null;
     }
-    if (seq !== this.mapSeq || base !== this.baseUrl) return;
+    if (seq !== this.mapSeq || base !== this.baseUrl) return null;
+    return map;
+  }
+
+  /** Refetch the source map and re-evaluate the current target. */
+  async refreshMap(): Promise<void> {
+    const map = await this.fetchMap();
+    if (!map) return;
     this.map = map;
     this.evaluate();
   }
 
   /**
-   * Auto-reload: refetch the map (which retargets a renamed, deleted or
-   * unpublished note), then reload the page unless that already loaded a
-   * different one.
+   * Auto-reload after a save: refetch the map, then reload the shown page
+   * in place. Retargets (via the active note) only when the shown page was
+   * renamed, deleted or unpublished. Does nothing when the fetch failed or
+   * was superseded, so no reload lands on an error panel or a stale map.
    */
   async refreshAndReload(): Promise<void> {
-    const before = this.navCount;
-    await this.refreshMap();
-    if (this.navCount === before) this.reload();
+    const map = await this.fetchMap();
+    if (!map) return;
+    const before = this.map;
+    this.map = map;
+    const action = decideAfterSave({
+      shownUrl: this.currentUrl,
+      before,
+      after: map,
+    });
+    if (action === "retarget") this.evaluate();
+    else this.reload();
   }
 
   /** Settings validation failed: show its problem instead of a page. */

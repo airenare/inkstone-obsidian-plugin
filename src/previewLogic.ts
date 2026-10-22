@@ -127,3 +127,33 @@ export function vaultPathForSiteFile(
   const site = siteFolder.replace(/[\\/]+$/, "");
   return normalizeFile(`${site}/${siteFile}`, vaultBase);
 }
+
+export type AfterSave = "reload" | "retarget";
+
+/**
+ * What auto-reload does once a fresh source map is in.
+ *
+ * Inputs: `shownUrl` is the URL the preview is on (null when it shows no
+ * page); `before` is the map the preview used until now; `after` is the
+ * fresh one.
+ *
+ * "reload": reload the shown page in place. That covers a note edited in
+ * place and any page that is not a note (/search, /tags): the reader keeps
+ * their place and is never pulled back to the active note.
+ * "retarget": re-decide the target from the active note, because the shown
+ * page's entry was renamed, deleted or unpublished (or nothing is shown).
+ */
+export function decideAfterSave(input: {
+  shownUrl: string | null;
+  before: Pick<SourceMap, "fileForUrl"> | null;
+  after: Pick<SourceMap, "fileForUrl">;
+}): AfterSave {
+  const { shownUrl, before, after } = input;
+  if (!shownUrl) return "retarget";
+  const was = before?.fileForUrl(shownUrl);
+  if (!was) return before ? "reload" : "retarget";
+  const now = after.fileForUrl(shownUrl);
+  if (!now || now.file !== was.file) return "retarget";
+  if (!now.published && !now.private) return "retarget";
+  return "reload";
+}

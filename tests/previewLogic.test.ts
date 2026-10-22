@@ -239,3 +239,55 @@ describe("path mapping", () => {
     expect(vaultPathForSiteFile("/v", "/elsewhere", "a.md")).toBeNull();
   });
 });
+
+import { decideAfterSave } from "../src/previewLogic";
+import { SourceMap as SM } from "../src/sourceMap";
+
+describe("decideAfterSave", () => {
+  const e = (file: string, url: string | null, published = true) => ({
+    file,
+    url,
+    published,
+    private: false,
+  });
+  const base = new SM([e("a.md", "/a"), e("b.md", "/b")]);
+  const BASE = "http://127.0.0.1:8000";
+
+  it("reloads in place when the shown note was edited", () => {
+    expect(
+      decideAfterSave({ shownUrl: BASE + "/a", before: base, after: base }),
+    ).toBe("reload");
+  });
+  it("reloads in place when the user is on a non-note page", () => {
+    expect(
+      decideAfterSave({ shownUrl: BASE + "/search", before: base, after: base }),
+    ).toBe("reload");
+  });
+  it("retargets when the shown note was renamed", () => {
+    const after = new SM([e("a2.md", "/a2"), e("b.md", "/b")]);
+    expect(
+      decideAfterSave({ shownUrl: BASE + "/a", before: base, after }),
+    ).toBe("retarget");
+  });
+  it("retargets when the shown note was deleted", () => {
+    const after = new SM([e("b.md", "/b")]);
+    expect(
+      decideAfterSave({ shownUrl: BASE + "/a", before: base, after }),
+    ).toBe("retarget");
+  });
+  it("retargets when the shown note was unpublished", () => {
+    const after = new SM([e("a.md", null, false), e("b.md", "/b")]);
+    expect(
+      decideAfterSave({ shownUrl: BASE + "/a", before: base, after }),
+    ).toBe("retarget");
+    const after2 = new SM([e("a.md", "/a", false), e("b.md", "/b")]);
+    expect(
+      decideAfterSave({ shownUrl: BASE + "/a", before: base, after: after2 }),
+    ).toBe("retarget");
+  });
+  it("retargets when nothing is shown", () => {
+    expect(decideAfterSave({ shownUrl: null, before: base, after: base })).toBe(
+      "retarget",
+    );
+  });
+});
