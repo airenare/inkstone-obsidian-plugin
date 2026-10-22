@@ -1,4 +1,4 @@
-# InkStone for Obsidian
+# InkStone Preview
 
 Edit a note on the left. See the real page on the right.
 
@@ -22,11 +22,11 @@ Edit a note on the left. See the real page on the right.
 
 **BRAT.** Add `airenare/inkstone-obsidian-plugin` in the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin. It installs the latest release and keeps it updated.
 
-**Manual.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/airenare/inkstone-obsidian-plugin/releases/latest) into `<your vault>/.obsidian/plugins/inkstone-preview/`, then enable **InkStone** under Settings > Community plugins.
+**Manual.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/airenare/inkstone-obsidian-plugin/releases/latest) into `<your vault>/.obsidian/plugins/inkstone-preview/`, then enable **InkStone Preview** under Settings > Community plugins.
 
 ## Quick start
 
-1. Open Settings > **InkStone**.
+1. Open Settings > **InkStone Preview**.
 2. Set **InkStone checkout** to the folder where you cloned InkStone (the one with `app.py`). The Python path fills in on its own.
 3. Set **Site folder** to the folder that holds your site notes. Use **Browse**, or type a path. `~/notes/site` works, and so does a path relative to your vault. The settings page tells you right away if something's wrong.
 4. Click the globe icon in the ribbon, or run the command **Open InkStone preview**.
@@ -93,7 +93,7 @@ Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 - **Runs other programs.** It starts your Python (running InkStone) and `git` as child processes. Both are stopped when Obsidian closes.
 - **No account, payment, ads or telemetry.** The plugin sends nothing anywhere, and it never installs or updates itself or any dependency.
 - **Open source.** MIT licensed, readable source, no obfuscation.
-- **Not affiliated with Obsidian.** InkStone for Obsidian is an independent community plugin.
+- **Not affiliated with Obsidian.** InkStone Preview is an independent community plugin.
 
 ## Troubleshooting
 
