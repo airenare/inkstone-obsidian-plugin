@@ -15,7 +15,7 @@ Edit a note on the left. See the real page on the right.
 ## Requirements
 
 - **Obsidian desktop.** Mobile isn't supported, because the plugin starts a local process.
-- **A local InkStone checkout, version 1.57.0 or newer,** with its Python environment set up (by default, a `.venv` inside the checkout). The plugin reads the checkout's `VERSION` file and tells you to `git pull` if it's older.
+- **A local InkStone checkout, version 1.57.0 or newer,** with its Python environment set up (by default, a `.venv` inside the checkout). The plugin reads the checkout's `VERSION` file and tells you to `git pull` if it's older. Version 1.58.0 or newer is recommended: it makes the server stop with Obsidian even after a crash or force-quit.
 - **`git`,** if you want the git panel.
 
 ## Install
@@ -81,6 +81,7 @@ Hover a disabled button to see why. The preview works in every state. A few deta
 - The plugin never stores credentials. The Owner view token is random, kept in memory, and only sent to the local InkStone server the plugin started.
 - The plugin-started server also gets a random `WEBHOOK_SECRET`, so its `/webhook` endpoint can't be used to run `git pull` in your notes.
 - The preview server only listens on `127.0.0.1`, on a random port.
+- The server is started with a pipe on its stdin that Obsidian keeps open. When Obsidian exits for any reason, the pipe closes and InkStone (1.58.0 or newer) shuts itself down.
 - The dev source-map endpoint (what lets clicks in the preview open the right note) exists only when the plugin starts InkStone itself with `INKSTONE_DEV_API=1`. A server you run on your own doesn't have it.
 
 ## Troubleshooting
@@ -97,7 +98,7 @@ Hover a disabled button to see why. The preview works in every state. A few deta
 ## Known limitations
 
 - Links with `target="_blank"` (social links, the footer, some canvas links) do nothing in the preview.
-- If Obsidian is hard-killed (a crash or force-quit), the local server can keep running until you end it yourself.
+- On InkStone 1.57.x, a hard-killed Obsidian (crash or force-quit) can leave the local server running until you end it yourself. InkStone 1.58.0 and newer shut the server down with Obsidian in every case.
 - A `.env` file in the InkStone checkout that sets `URL_PATH_PREFIX` isn't supported.
 - Linux and Windows haven't been run live yet. Reports are welcome.
 

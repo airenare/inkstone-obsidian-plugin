@@ -12,6 +12,7 @@ export type ServerStatus = "stopped" | "starting" | "running" | "crashed";
 /** The subset of ChildProcess the manager relies on. */
 export interface ChildLike {
   pid?: number;
+  stdin?: { on(event: "error", cb: (err: Error) => void): unknown } | null;
   stdout: { on(event: "data", cb: (d: Buffer) => void): unknown } | null;
   stderr: { on(event: "data", cb: (d: Buffer) => void): unknown } | null;
   on(event: "exit", cb: (code: number | null, sig: string | null) => void): unknown;
@@ -85,6 +86,9 @@ export function buildServerEnv(
     // Without a secret InkStone's /webhook runs `git pull` for anyone.
     WEBHOOK_SECRET: randomBytes(32).toString("hex"),
     INKSTONE_DEV_API: "1",
+    // InkStone >= 1.58.0 exits when its stdin closes. We keep a pipe open
+    // on it (see SERVER_STDIO), so the server dies with Obsidian.
+    INKSTONE_EXIT_ON_STDIN_EOF: "1",
   };
 }
 
@@ -121,16 +125,18 @@ function probeReal(url: string): Promise<number> {
 }
 
 /**
- * Orphan protection. Covers: window close/reload (beforeunload, pagehide),
- * normal Node exit. Signal handlers are deliberately NOT installed: a
- * SIGTERM/SIGHUP listener removes Node's default terminate action. NOT
- * covered: a hard kill of
- * Obsidian (SIGKILL, crash, Task Manager "End task") gives no code a chance
- * to run, and the detached process group / taskkill tree is not tied to the
- * parent's lifetime. The next start() therefore uses a fresh random port and
- * token, so a leftover server is harmless but keeps running until the user
- * ends it; this is a documented limit rather than something we can fix from
- * plugin code on all three OSes.
+ * Orphan protection, in two layers.
+ *
+ * 1. Stdin pipe (InkStone >= 1.58.0). The server is started with a pipe on
+ *    stdin that we never write to or close, and INKSTONE_EXIT_ON_STDIN_EOF=1.
+ *    When Obsidian dies for any reason, including a SIGKILL, a crash or
+ *    Task Manager "End task", the OS closes our end of the pipe and
+ *    InkStone (and the Flask reloader's worker) exits on EOF. Older
+ *    InkStone versions ignore the variable and keep running.
+ * 2. Exit hooks: window close/reload (beforeunload, pagehide) and normal Node
+ *    exit kill the process tree. Signal handlers are deliberately NOT
+ *    installed: a SIGTERM/SIGHUP listener removes Node's default terminate
+ *    action.
  */
 function installExitHooksReal(cleanup: () => void): () => void {
   const w = (globalThis as { window?: Window }).window;
@@ -145,10 +151,16 @@ function installExitHooksReal(cleanup: () => void): () => void {
   };
 }
 
+/**
+ * stdin MUST be a pipe, not "ignore": with "ignore" InkStone would read EOF
+ * from /dev/null at once and exit right after starting.
+ */
+export const SERVER_STDIO = ["pipe", "pipe", "pipe"] as const;
+
 function realDeps(): ServerDeps {
   return {
     spawn: (cmd, args, opts) =>
-      nodeSpawn(cmd, args, { ...opts, stdio: ["ignore", "pipe", "pipe"] }),
+      nodeSpawn(cmd, args, { ...opts, stdio: [...SERVER_STDIO] }),
     killTree: killTreeReal,
     probe: probeReal,
     pickPort: pickFreePort,
@@ -270,6 +282,9 @@ export class InkStoneServer {
       });
       child = c;
       this.child = c;
+      // We never write to it, but an unhandled EPIPE 'error' on the pipe
+      // would otherwise throw in the renderer when the server exits.
+      c.stdin?.on("error", () => undefined);
       let spawnError: Error | null = null;
       let exited = false;
       this.childExit = new Promise<void>((resolve) => {
