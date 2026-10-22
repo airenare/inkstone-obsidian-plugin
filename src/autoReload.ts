@@ -74,6 +74,18 @@ export class ReloadScheduler {
 }
 
 /**
+ * The scheduler as the plugin uses it. The flush must return its promise:
+ * the in-flight guard only works when the scheduler can see it finish.
+ */
+export function createReloadScheduler(
+  flush: () => Promise<void>,
+  delayMs: number = RELOAD_DEBOUNCE_MS,
+  timers?: Timers,
+): ReloadScheduler {
+  return new ReloadScheduler(flush, delayMs, timers);
+}
+
+/**
  * True when any of the vault-relative paths (two for a rename) lies inside
  * the site folder. Both folders are absolute filesystem paths.
  */

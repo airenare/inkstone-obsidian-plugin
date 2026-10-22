@@ -285,6 +285,29 @@ describe("decideAfterSave", () => {
       decideAfterSave({ shownUrl: BASE + "/a", before: base, after: after2 }),
     ).toBe("retarget");
   });
+  it("retargets when a not-published panel covers the shown page", () => {
+    // Active note was unpublished, panel up, old /b still in currentUrl;
+    // the note is now published: do not reload the hidden /b.
+    const after = new SM([e("a.md", "/a"), e("b.md", "/b")]);
+    expect(
+      decideAfterSave({
+        shownUrl: BASE + "/b",
+        before: base,
+        after,
+        panelVisible: true,
+      }),
+    ).toBe("retarget");
+  });
+  it("still reloads in place on /search when no panel is up", () => {
+    expect(
+      decideAfterSave({
+        shownUrl: BASE + "/search",
+        before: base,
+        after: base,
+        panelVisible: false,
+      }),
+    ).toBe("reload");
+  });
   it("retargets when nothing is shown", () => {
     expect(decideAfterSave({ shownUrl: null, before: base, after: base })).toBe(
       "retarget",

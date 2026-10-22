@@ -92,6 +92,8 @@ export class InkStonePreviewView extends ItemView {
   private sessionUnlocked = false;
   private pendingTokenLoad = false;
   private lastHttpCode = 0;
+  /** A "not published / not in the site folder" panel covers the webview. */
+  private targetPanel = false;
   /** Counts real webview loads, so a reload never cancels a fresh one. */
   private navCount = 0;
   /** The server went down since the page loaded; reload once it is back. */
@@ -232,6 +234,7 @@ export class InkStonePreviewView extends ItemView {
       shownUrl: this.currentUrl,
       before,
       after: map,
+      panelVisible: this.targetPanel,
     });
     if (action === "retarget") this.evaluate();
     else this.reload();
@@ -321,6 +324,7 @@ export class InkStonePreviewView extends ItemView {
       : null;
     if (rel === null) {
       this.setPrivateBadge(false);
+      this.targetPanel = true;
       this.showPanel({
         title: "Not in the site folder",
         body: `"${file.name}" isn't part of the InkStone site.`,
@@ -342,6 +346,7 @@ export class InkStonePreviewView extends ItemView {
     if (target.kind !== "url") {
       const isPage = ["md", "base", "canvas"].includes(file.extension);
       this.setPrivateBadge(false);
+      this.targetPanel = true;
       this.showPanel({
         title: 'Not published (no "website: true")',
         body: isPage
@@ -668,6 +673,7 @@ export class InkStonePreviewView extends ItemView {
   }
 
   private hidePanel(): void {
+    this.targetPanel = false;
     this.panelEl.hide();
     this.stageEl.removeClass("has-panel");
   }

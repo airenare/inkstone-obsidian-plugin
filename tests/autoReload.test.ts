@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pathsToNotify, ReloadScheduler } from "../src/autoReload";
+import {
+  createReloadScheduler,
+  pathsToNotify,
+  ReloadScheduler,
+} from "../src/autoReload";
 
 describe("ReloadScheduler", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -104,6 +108,40 @@ describe("ReloadScheduler in-flight guard", () => {
     s.notify();
     await vi.advanceTimersByTimeAsync(300);
     expect(flush).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("createReloadScheduler wiring", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("guards an async flush: one follow-up, no overlap", async () => {
+    let active = 0;
+    let maxActive = 0;
+    let calls = 0;
+    let release: () => void = () => {};
+    // Same shape as main.ts: the plugin hands over its flush method.
+    const flushReload = async (): Promise<void> => {
+      calls++;
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((r) => (release = r));
+      active--;
+    };
+    const s = createReloadScheduler(() => flushReload(), 300);
+    s.notify();
+    await vi.advanceTimersByTimeAsync(300);
+    s.notify();
+    s.notify();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(calls).toBe(1);
+    release();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(calls).toBe(2);
+    release();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(calls).toBe(2);
+    expect(maxActive).toBe(1);
   });
 });
 

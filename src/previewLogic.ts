@@ -141,15 +141,18 @@ export type AfterSave = "reload" | "retarget";
  * place and any page that is not a note (/search, /tags): the reader keeps
  * their place and is never pulled back to the active note.
  * "retarget": re-decide the target from the active note, because the shown
- * page's entry was renamed, deleted or unpublished (or nothing is shown).
+ * page's entry was renamed, deleted or unpublished, nothing is shown, or a
+ * "not published / not in the site folder" panel covers the webview
+ * (`panelVisible`): then the old page underneath must not come back.
  */
 export function decideAfterSave(input: {
   shownUrl: string | null;
   before: Pick<SourceMap, "fileForUrl"> | null;
   after: Pick<SourceMap, "fileForUrl">;
+  panelVisible?: boolean;
 }): AfterSave {
-  const { shownUrl, before, after } = input;
-  if (!shownUrl) return "retarget";
+  const { shownUrl, before, after, panelVisible } = input;
+  if (!shownUrl || panelVisible) return "retarget";
   const was = before?.fileForUrl(shownUrl);
   if (!was) return before ? "reload" : "retarget";
   const now = after.fileForUrl(shownUrl);

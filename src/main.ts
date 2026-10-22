@@ -3,7 +3,8 @@ import { resolve as resolvePath } from "path";
 import {
   pathsToNotify,
   RELOAD_DEBOUNCE_MS,
-  ReloadScheduler,
+  createReloadScheduler,
+  type ReloadScheduler,
 } from "./autoReload";
 import { validateEnvironment } from "./environment";
 import { InkStonePreviewView, VIEW_TYPE_PREVIEW } from "./previewView";
@@ -35,8 +36,8 @@ export default class InkStonePlugin extends Plugin {
       }
     });
 
-    this.reloader = new ReloadScheduler(
-      () => void this.flushReload(),
+    this.reloader = createReloadScheduler(
+      () => this.flushReload(),
       RELOAD_DEBOUNCE_MS,
     );
     const { vault } = this.app;
