@@ -207,3 +207,24 @@
 .inkstone-git button.inkstone-git-name:focus-visible {
   outline: 2px solid var(--interactive-accent);
 }
+
+/* Settings: environment status row */
+.inkstone-status.mod-warning .setting-item-description {
+  color: var(--text-warning, var(--text-error));
+}
+
+/* Vault folder picker: tree-style rows */
+.inkstone-folder-row {
+  padding-left: calc(var(--inkstone-depth, 0) * var(--size-4-4));
+}
+.inkstone-folder-name {
+  color: var(--text-normal);
+}
+.inkstone-folder-path {
+  margin-left: var(--size-4-2);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.inkstone-hidden-input {
+  display: none;
+}

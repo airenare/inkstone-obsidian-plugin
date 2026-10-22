@@ -1,13 +1,15 @@
-import { App, Notice, PluginSettingTab, Setting, TextComponent } from "obsidian";
 import {
-  defaultPythonPath,
-  folderFromPickedFile,
-} from "./environment";
+  App,
+  Notice,
+  PluginSettingTab,
+  Setting,
+  SettingDefinitionItem,
+  TextComponent,
+} from "obsidian";
+import { pickDiskFolder } from "./diskPicker";
+import { defaultPythonPath } from "./environment";
 import type InkStonePlugin from "./main";
-
-interface ElectronLike {
-  webUtils?: { getPathForFile?: (file: File) => string };
-}
+import { VaultFolderModal } from "./vaultFolderModal";
 
 export interface InkStoneSettings {
   siteFolder: string;
@@ -25,8 +27,10 @@ export const DEFAULT_SETTINGS: InkStoneSettings = {
 
 export class InkStoneSettingTab extends PluginSettingTab {
   private plugin: InkStonePlugin;
+  private siteText: TextComponent | undefined;
+  private checkoutText: TextComponent | undefined;
   private pythonText: TextComponent | undefined;
-  private statusEl!: HTMLElement;
+  private statusSetting: Setting | undefined;
   private timer: number | undefined;
 
   constructor(app: App, plugin: InkStonePlugin) {
@@ -34,95 +38,125 @@ export class InkStoneSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
+  getSettingDefinitions(): SettingDefinitionItem[] {
     const s = this.plugin.settings;
+    return [
+      {
+        name: "Environment",
+        desc: "Checking...",
+        searchable: false,
+        render: (setting) => {
+          this.statusSetting = setting;
+          setting.settingEl.addClass("inkstone-status");
+          void this.refreshStatus();
+        },
+      },
+      {
+        name: "Site folder",
+        desc:
+          "Folder holding your site notes. Choose one from your vault " +
+          "(a dot is the vault root), or browse to any folder on disk. " +
+          "Relative paths resolve against the vault. Folders outside the " +
+          "vault still preview, but auto-reload and editor sync only work " +
+          "inside the vault.",
+        aliases: ["notes", "vault", "root", "directory"],
+        render: (setting) => {
+          setting.addText((t) => {
+            this.siteText = t;
+            t.setPlaceholder("Folder in your vault, or a full path")
+              .setValue(s.siteFolder)
+              .onChange((v) => this.applyChange({ siteFolder: v }));
+          });
+          setting.addButton((b) =>
+            b.setButtonText("Choose from vault").onClick(() => {
+              new VaultFolderModal(this.app, (value) => {
+                this.siteText?.setValue(value);
+                this.applyChange({ siteFolder: value });
+              }).open();
+            }),
+          );
+          setting.addButton((b) =>
+            b.setButtonText("Browse").onClick(() => {
+              void this.browse("Choose the site folder", (dir) => {
+                this.siteText?.setValue(dir);
+                this.applyChange({ siteFolder: dir });
+              });
+            }),
+          );
+        },
+      },
+      {
+        name: "Checkout folder",
+        desc: "The local clone of the engine: the folder with app.py.",
+        aliases: ["inkstone", "engine", "repository", "clone"],
+        render: (setting) => {
+          setting.addText((t) => {
+            this.checkoutText = t;
+            t.setValue(s.inkstoneCheckout).onChange((v) =>
+              this.applyChange({ inkstoneCheckout: v }, true),
+            );
+          });
+          setting.addButton((b) =>
+            b.setButtonText("Browse").onClick(() => {
+              void this.browse("Choose the checkout folder", (dir) => {
+                this.checkoutText?.setValue(dir);
+                this.applyChange({ inkstoneCheckout: dir }, true);
+              });
+            }),
+          );
+        },
+      },
+      {
+        name: "Python executable",
+        desc:
+          "Defaults to the venv inside the checkout. Must have the " +
+          "engine's requirements installed.",
+        aliases: ["venv", "interpreter"],
+        render: (setting) => {
+          setting.addText((t) => {
+            this.pythonText = t;
+            t.setPlaceholder(
+              defaultPythonPath(s.inkstoneCheckout || "<checkout>", process.platform),
+            )
+              .setValue(s.pythonPath)
+              .onChange((v) => this.applyChange({ pythonPath: v }));
+          });
+        },
+      },
+      {
+        name: "Start server automatically",
+        desc: "Start the preview server when Obsidian opens.",
+        control: { type: "toggle", key: "autoStartServer" },
+      },
+    ];
+  }
 
-    this.statusEl = containerEl.createDiv({ cls: "inkstone-status" });
+  getControlValue(key: string): unknown {
+    return this.plugin.settings[key as keyof InkStoneSettings];
+  }
 
-    const folder = new Setting(containerEl)
-      .setName("Site folder")
-      .setDesc(
-        "Folder holding your site notes. Relative paths resolve against " +
-          "the vault. Folders outside the vault still preview, but " +
-          "auto-reload and editor sync only work inside the vault.",
-      );
-    folder.addText((t) =>
-      t.setValue(s.siteFolder).onChange((v) => this.applyChange({ siteFolder: v })),
-    );
-    folder.addButton((b) =>
-      b.setButtonText("Browse").onClick(() => this.pickFolder()),
-    );
-
-    new Setting(containerEl)
-      .setName("Checkout folder")
-      .setDesc("The local clone of the engine: the folder with app.py.")
-      .addText((t) =>
-        t
-          .setValue(s.inkstoneCheckout)
-          .onChange((v) => this.applyChange({ inkstoneCheckout: v }, true)),
-      );
-
-    new Setting(containerEl)
-      .setName("Python executable")
-      .setDesc(
-        "Defaults to the venv inside the checkout. Must have the engine's requirements installed.",
-      )
-      .addText((t) => {
-        this.pythonText = t;
-        return t
-          .setPlaceholder(defaultPythonPath(s.inkstoneCheckout || "<checkout>", process.platform))
-          .setValue(s.pythonPath)
-          .onChange((v) => this.applyChange({ pythonPath: v }));
-      });
-
-    new Setting(containerEl)
-      .setName("Start server automatically")
-      .setDesc("Start the preview server when Obsidian opens.")
-      .addToggle((tg) =>
-        tg
-          .setValue(s.autoStartServer)
-          .onChange((v) => this.applyChange({ autoStartServer: v })),
-      );
-
-    void this.refreshStatus();
+  setControlValue(key: string, value: unknown): void {
+    this.applyChange({ [key]: value });
   }
 
   hide(): void {
     window.clearTimeout(this.timer);
   }
 
-  private pickFolder(): void {
-    const input = createEl("input", { type: "file" });
-    input.setAttribute("webkitdirectory", "");
-    input.onchange = () => {
-      const file = input.files?.[0];
-      const picked = file ? this.pathOf(file) : "";
-      if (file && picked) {
-        const dir = folderFromPickedFile(picked, file.webkitRelativePath);
-        this.applyChange({ siteFolder: dir });
-        this.display();
-      } else {
-        new Notice(
-          "Couldn't read the folder path; type it into the field instead.",
-        );
-      }
-    };
-    input.click();
-  }
-
-  private pathOf(file: File): string {
-    try {
-      const req = (window as unknown as { require?: (id: string) => unknown })
-        .require;
-      const electron = req?.("electron") as ElectronLike | undefined;
-      const p = electron?.webUtils?.getPathForFile?.(file);
-      if (p) return p;
-    } catch {
-      // not available; fall through
+  /** Opens a disk folder picker and hands the result to `apply`. */
+  private async browse(
+    title: string,
+    apply: (dir: string) => void,
+  ): Promise<void> {
+    const r = await pickDiskFolder(title);
+    if (r.kind === "picked") {
+      apply(r.path);
+    } else if (r.kind === "unavailable") {
+      new Notice(
+        "Couldn't open a folder picker here. Type the path into the field instead.",
+      );
+      console.error(`InkStone: folder picker unavailable (${r.reason})`);
     }
-    return (file as File & { path?: string }).path ?? "";
   }
 
   private applyChange(patch: Partial<InkStoneSettings>, rederive = false): void {
@@ -141,9 +175,11 @@ export class InkStoneSettingTab extends PluginSettingTab {
   }
 
   private async refreshStatus(): Promise<void> {
-    this.statusEl.setText("Checking environment...");
+    const setting = this.statusSetting;
+    if (!setting) return;
+    setting.setDesc("Checking...");
     const r = await this.plugin.validate();
-    this.statusEl.setText(r.ok ? "Environment OK." : r.problem);
-    this.statusEl.toggleClass("mod-warning", !r.ok);
+    setting.setDesc(r.ok ? "Everything looks good." : r.problem);
+    setting.settingEl.toggleClass("mod-warning", !r.ok);
   }
 }
