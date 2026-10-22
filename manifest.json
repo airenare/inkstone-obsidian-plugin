@@ -1,0 +1,9 @@
+{
+  "id": "inkstone-preview",
+  "name": "InkStone",
+  "version": "0.1.0",
+  "minAppVersion": "1.14.4",
+  "description": "Preview notes as rendered by a local InkStone server.",
+  "author": "Anton Bakulin",
+  "isDesktopOnly": true
+}
