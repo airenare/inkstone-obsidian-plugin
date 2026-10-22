@@ -105,7 +105,7 @@ export const realDeps: EnvironmentDeps = {
             stderr: String(stderr),
           });
         } else {
-          reject(err);
+          reject(err instanceof Error ? err : new Error("Command failed"));
         }
       });
     });

@@ -80,12 +80,12 @@ export type Fetcher = (
 
 /**
  * Plugin code must pass a fetcher built on Obsidian's `requestUrl`: the
- * default global `fetch` is blocked by CORS in the renderer because the
- * InkStone server sends no CORS headers.
+ * global `fetch` is blocked by CORS in the renderer because the InkStone
+ * server sends no CORS headers, so there is deliberately no default.
  */
 export async function fetchSourceMap(
   baseUrl: string,
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher,
 ): Promise<SourceMap> {
   const url = baseUrl.replace(/\/+$/, "") + "/__inkstone/source-map";
   let res: { status: number; text(): Promise<string> };
@@ -103,14 +103,15 @@ export async function fetchSourceMap(
   if (res.status < 200 || res.status >= 300) {
     throw new Error(`Source map request failed with status ${res.status}`);
   }
-  let data: any;
+  let data: unknown;
   try {
-    data = JSON.parse(await res.text());
+    data = JSON.parse(await res.text()) as unknown;
   } catch {
     throw new Error("Source map response was invalid JSON");
   }
-  if (!data || !Array.isArray(data.files)) {
+  const files = (data as { files?: unknown } | null)?.files;
+  if (!Array.isArray(files)) {
     throw new Error("Source map response was invalid: missing files list");
   }
-  return new SourceMap(data.files as SourceEntry[]);
+  return new SourceMap(files as SourceEntry[]);
 }

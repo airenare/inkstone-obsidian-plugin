@@ -1,6 +1,6 @@
 {
   "name": "inkstone-preview",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Preview Obsidian notes rendered by a local InkStone server.",
   "main": "main.js",
   "private": true,

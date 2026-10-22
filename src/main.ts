@@ -82,17 +82,17 @@ export default class InkStonePlugin extends Plugin {
       VIEW_TYPE_PREVIEW,
       (leaf) => new InkStonePreviewView(leaf, this),
     );
-    this.addRibbonIcon("globe", "Open InkStone preview", () => {
+    this.addRibbonIcon("globe", "Open preview", () => {
       void this.activatePreview();
     });
     this.addCommand({
       id: "open-preview",
-      name: "Open InkStone preview",
+      name: "Open preview",
       callback: () => void this.activatePreview(),
     });
     this.addCommand({
       id: "restart-server",
-      name: "Restart InkStone server",
+      name: "Restart server",
       callback: () => void this.restartServer(),
     });
     this.addSettingTab(new InkStoneSettingTab(this.app, this));
@@ -223,7 +223,7 @@ export default class InkStonePlugin extends Plugin {
       this.reportEnvProblem(env.problem);
       return;
     }
-    new Notice("Restarting InkStone server with the new settings");
+    new Notice("Restarting the server with the new settings");
     await this.restartValidated();
   }
 
@@ -253,7 +253,8 @@ export default class InkStonePlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const saved = (await this.loadData()) as Partial<InkStoneSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
     this.savedSettings = { ...this.settings };
   }
 

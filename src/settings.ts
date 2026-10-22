@@ -5,6 +5,10 @@ import {
 } from "./environment";
 import type InkStonePlugin from "./main";
 
+interface ElectronLike {
+  webUtils?: { getPathForFile?: (file: File) => string };
+}
+
 export interface InkStoneSettings {
   siteFolder: string;
   inkstoneCheckout: string;
@@ -52,8 +56,8 @@ export class InkStoneSettingTab extends PluginSettingTab {
     );
 
     new Setting(containerEl)
-      .setName("InkStone checkout")
-      .setDesc("Folder where you cloned InkStone (contains app.py).")
+      .setName("Checkout folder")
+      .setDesc("The local clone of the engine: the folder with app.py.")
       .addText((t) =>
         t
           .setValue(s.inkstoneCheckout)
@@ -63,7 +67,7 @@ export class InkStoneSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Python executable")
       .setDesc(
-        "Defaults to the venv inside the checkout. Must have InkStone's requirements installed.",
+        "Defaults to the venv inside the checkout. Must have the engine's requirements installed.",
       )
       .addText((t) => {
         this.pythonText = t;
@@ -90,8 +94,7 @@ export class InkStoneSettingTab extends PluginSettingTab {
   }
 
   private pickFolder(): void {
-    const input = document.createElement("input");
-    input.type = "file";
+    const input = createEl("input", { type: "file" });
     input.setAttribute("webkitdirectory", "");
     input.onchange = () => {
       const file = input.files?.[0];
@@ -111,8 +114,9 @@ export class InkStoneSettingTab extends PluginSettingTab {
 
   private pathOf(file: File): string {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const electron = require("electron");
+      const req = (window as unknown as { require?: (id: string) => unknown })
+        .require;
+      const electron = req?.("electron") as ElectronLike | undefined;
       const p = electron?.webUtils?.getPathForFile?.(file);
       if (p) return p;
     } catch {

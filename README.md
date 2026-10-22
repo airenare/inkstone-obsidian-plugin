@@ -27,9 +27,9 @@ Edit a note on the left. See the real page on the right.
 ## Quick start
 
 1. Open Settings > **InkStone Preview**.
-2. Set **InkStone checkout** to the folder where you cloned InkStone (the one with `app.py`). The Python path fills in on its own.
+2. Set **Checkout folder** to the folder where you cloned InkStone (the one with `app.py`). The Python path fills in on its own.
 3. Set **Site folder** to the folder that holds your site notes. Use **Browse**, or type a path. `~/notes/site` works, and so does a path relative to your vault. The settings page tells you right away if something's wrong.
-4. Click the globe icon in the ribbon, or run the command **Open InkStone preview**.
+4. Click the globe icon in the ribbon, or run the command **Open preview**.
 5. Open any note in the site folder. The preview shows its page. Edit, save, and watch it update.
 
 The site folder works the same way InkStone's vault does: files at the top level become `/slug`, a `blog/` folder becomes `/blog/...`, and so on.
@@ -39,13 +39,13 @@ The site folder works the same way InkStone's vault does: files at the top level
 | Setting | What it does |
 | --- | --- |
 | Site folder | The folder with your site notes. Accepts absolute paths, `~/...` paths, and paths relative to the vault. A folder outside the vault still previews, but auto-reload and editor sync only work inside the vault, because Obsidian only reports changes to vault files. |
-| InkStone checkout | The folder where you cloned InkStone. |
+| Checkout folder | The folder where you cloned InkStone, the one with `app.py`. |
 | Python executable | Defaults to the checkout's venv: `<checkout>/.venv/bin/python3` on macOS and Linux, `<checkout>\.venv\Scripts\python.exe` on Windows. It needs InkStone's requirements installed. |
 | Start server automatically | Starts the preview server when Obsidian opens. Otherwise it starts the first time you open the preview. |
 
 Change the site folder, checkout or Python path while the server's running and the plugin restarts it for you.
 
-There's also a command, **Restart InkStone server**, and the preview toolbar shows the server status with a Restart button if it ever crashes.
+There's also a command, **Restart server**, and the preview toolbar shows the server status with a Restart button if it ever crashes.
 
 ## The preview pane
 
@@ -89,7 +89,7 @@ Hover a disabled button to see why. The preview works in every state. A few deta
 Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 
 - **Network use.** The plugin itself doesn't contact any remote service. It talks only to the InkStone server it starts on `127.0.0.1`. Two things can still reach the network on your behalf: the pages InkStone renders can load whatever your site's theme and settings include (for example Giscus comments or web fonts), and the git panel runs your own `git`, which contacts your git remote when you click Pull or Push.
-- **Files outside your vault.** InkStone is a separate program, so the plugin has to reach outside the vault. It reads the **site folder** you choose, which can be anywhere on disk. It checks the **InkStone checkout** (`app.py` and `VERSION`) and runs Python from it. It runs `git` in the site folder, and only changes anything when you click Commit, Pull or Push. The plugin never edits your notes itself.
+- **Files outside your vault.** InkStone is a separate program, so the plugin has to reach outside the vault. It reads the **site folder** you choose, which can be anywhere on disk. It checks the **checkout folder** (`app.py` and `VERSION`) and runs Python from it. It runs `git` in the site folder, and only changes anything when you click Commit, Pull or Push. The plugin never edits your notes itself.
 - **Runs other programs.** It starts your Python (running InkStone) and `git` as child processes. Both are stopped when Obsidian closes.
 - **No account, payment, ads or telemetry.** The plugin sends nothing anywhere, and it never installs or updates itself or any dependency.
 - **Open source.** MIT licensed, readable source, no obfuscation.
@@ -99,7 +99,7 @@ Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 
 | You see | What to do |
 | --- | --- |
-| "No app.py found in ..." | Point **InkStone checkout** at the repository root, the folder that contains `app.py`. |
+| "No app.py found in ..." | Point **Checkout folder** at the repository root, the folder that contains `app.py`. |
 | "InkStone x.y.z found; this plugin needs 1.57.0 or newer" | `git pull` in your InkStone checkout. |
 | A Python or Flask error in the settings | Install InkStone's requirements into the Python you chose (`pip install -r requirements.txt`), or point **Python executable** at the right venv. |
 | "Not published" in the pane | The note needs `website: true` in its frontmatter. For `.base` and `.canvas` files, rename them to end with `__website`. |

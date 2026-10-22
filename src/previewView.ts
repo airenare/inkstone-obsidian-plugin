@@ -123,7 +123,7 @@ export class InkStonePreviewView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "InkStone preview";
+    return "Site preview";
   }
 
   getIcon(): string {
@@ -391,7 +391,8 @@ export class InkStonePreviewView extends ItemView {
   private createWebview(url: string): void {
     this.webview?.remove();
     this.webviewReady = false;
-    const wv = document.createElement("webview") as WebviewElement;
+    // "webview" is Electron-only and missing from lib.dom typings.
+    const wv = createEl("webview" as "div") as unknown as WebviewElement;
     wv.addClass("inkstone-webview");
     wv.setAttribute("partition", this.partition);
     wv.setAttribute("src", url);

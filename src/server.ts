@@ -139,14 +139,14 @@ function probeReal(url: string): Promise<number> {
  *    action.
  */
 function installExitHooksReal(cleanup: () => void): () => void {
-  const w = (globalThis as { window?: Window }).window;
+  const w = window;
   const onExit = () => cleanup();
-  w?.addEventListener("beforeunload", onExit);
-  w?.addEventListener("pagehide", onExit);
+  w.addEventListener("beforeunload", onExit);
+  w.addEventListener("pagehide", onExit);
   process.on("exit", onExit);
   return () => {
-    w?.removeEventListener("beforeunload", onExit);
-    w?.removeEventListener("pagehide", onExit);
+    w.removeEventListener("beforeunload", onExit);
+    w.removeEventListener("pagehide", onExit);
     process.off("exit", onExit);
   };
 }
@@ -165,7 +165,7 @@ function realDeps(): ServerDeps {
     probe: probeReal,
     pickPort: pickFreePort,
     getPath: getLoginShellPath,
-    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    sleep: (ms) => new Promise((r) => window.setTimeout(r, ms)),
     // Obsidian's guidelines allow console output for errors only.
     log: () => undefined,
     platform: process.platform,

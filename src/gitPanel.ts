@@ -279,7 +279,7 @@ export class GitPanel {
     this.diffEl.show();
     this.diffEl.setText("Loading diff...");
     // Wait for any in-flight action so git calls never overlap.
-    while (this.busy) await new Promise((r) => setTimeout(r, 50));
+    while (this.busy) await new Promise((r) => window.setTimeout(r, 50));
     if (seq !== this.diffSeq || this.disposed) return;
     this.setBusy(true);
     try {
