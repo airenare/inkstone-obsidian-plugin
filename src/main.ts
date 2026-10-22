@@ -1,4 +1,10 @@
-import { Notice, Plugin } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, type TAbstractFile } from "obsidian";
+import { resolve as resolvePath } from "path";
+import {
+  pathsToNotify,
+  RELOAD_DEBOUNCE_MS,
+  ReloadScheduler,
+} from "./autoReload";
 import { validateEnvironment } from "./environment";
 import { InkStonePreviewView, VIEW_TYPE_PREVIEW } from "./previewView";
 import { InkStoneServer, type ServerStatus } from "./server";
@@ -17,6 +23,7 @@ export default class InkStonePlugin extends Plugin {
   server!: InkStoneServer;
   /** Why the last start attempt failed; "" after a successful start. */
   lastStartError = "";
+  private reloader: ReloadScheduler | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -27,6 +34,26 @@ export default class InkStonePlugin extends Plugin {
         v.onServerStatus(s as ServerStatus);
       }
     });
+
+    this.reloader = new ReloadScheduler(
+      () => void this.flushReload(),
+      RELOAD_DEBOUNCE_MS,
+    );
+    const { vault } = this.app;
+    this.registerEvent(
+      vault.on("modify", (f) => this.onVaultChange(f.path)),
+    );
+    this.registerEvent(
+      vault.on("create", (f) => this.onVaultChange(f.path)),
+    );
+    this.registerEvent(
+      vault.on("delete", (f) => this.onVaultChange(f.path)),
+    );
+    this.registerEvent(
+      vault.on("rename", (f: TAbstractFile, oldPath: string) =>
+        this.onVaultChange(f.path, oldPath),
+      ),
+    );
 
     this.registerView(
       VIEW_TYPE_PREVIEW,
@@ -57,8 +84,31 @@ export default class InkStonePlugin extends Plugin {
   }
 
   onunload(): void {
+    this.reloader?.dispose();
+    this.reloader = null;
     // stop() kills the process tree synchronously before its first await.
     void this.server?.stop();
+  }
+
+  private onVaultChange(...paths: string[]): void {
+    if (this.server.status !== "running") return;
+    const adapter = this.app.vault.adapter;
+    if (!(adapter instanceof FileSystemAdapter)) return;
+    const site = resolvePath(this.settings.siteFolder);
+    if (pathsToNotify(adapter.getBasePath(), site, paths)) {
+      this.reloader?.notify();
+    }
+  }
+
+  private async flushReload(): Promise<void> {
+    if (this.server.status !== "running") return;
+    for (const v of this.previewViews()) {
+      try {
+        await v.refreshAndReload();
+      } catch {
+        console.warn("InkStone: auto-reload failed for a preview");
+      }
+    }
   }
 
   private previewViews(): InkStonePreviewView[] {

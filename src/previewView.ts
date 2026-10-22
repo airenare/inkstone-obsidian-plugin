@@ -91,6 +91,10 @@ export class InkStonePreviewView extends ItemView {
   private sessionUnlocked = false;
   private pendingTokenLoad = false;
   private lastHttpCode = 0;
+  /** Counts real webview loads, so a reload never cancels a fresh one. */
+  private navCount = 0;
+  /** The server went down since the page loaded; reload once it is back. */
+  private needsReload = false;
 
   private activeFile: TFile | null = null;
   private missRefreshedFor: string | null = null;
@@ -153,6 +157,9 @@ export class InkStonePreviewView extends ItemView {
     if (!this.dotEl) return; // not opened yet; onOpen reads the status
     this.updateDot(status);
     this.restartBtn.toggle(status === "crashed");
+    if (status === "starting" || status === "crashed") {
+      if (this.webview) this.needsReload = true;
+    }
     if (status === "starting") {
       this.sessionUnlocked = false;
       this.pendingTokenLoad = false;
@@ -198,6 +205,17 @@ export class InkStonePreviewView extends ItemView {
     this.evaluate();
   }
 
+  /**
+   * Auto-reload: refetch the map (which retargets a renamed, deleted or
+   * unpublished note), then reload the page unless that already loaded a
+   * different one.
+   */
+  async refreshAndReload(): Promise<void> {
+    const before = this.navCount;
+    await this.refreshMap();
+    if (this.navCount === before) this.reload();
+  }
+
   /** Settings validation failed: show its problem instead of a page. */
   showEnvProblem(problem: string): void {
     this.showPanel({
@@ -237,7 +255,13 @@ export class InkStonePreviewView extends ItemView {
       this.baseUrl = res.baseUrl;
       this.map = null;
     }
+    const before = this.navCount;
     await this.refreshMap();
+    // Restarted server, same URL: the old page is stale, so load it again.
+    if (this.needsReload) {
+      this.needsReload = false;
+      if (this.navCount === before) this.reload();
+    }
   }
 
   // ---- editor -> preview ----
@@ -319,6 +343,7 @@ export class InkStonePreviewView extends ItemView {
       if (this.lastHttpCode < 400) this.hidePanel();
       return;
     }
+    this.navCount++;
     this.currentUrl = url;
     this.pendingTokenLoad = /[?&]token=/.test(url);
     this.urlEl.value = displayUrl(url);
