@@ -8,16 +8,17 @@ import { execFile } from "child_process";
 export function getLoginShellPath(
   platform: NodeJS.Platform,
   timeoutMs = 3000,
+  exec: typeof execFile = execFile,
 ): Promise<string> {
   const fallback = process.env.PATH ?? "";
   if (platform === "win32") return Promise.resolve(fallback);
   const shell = process.env.SHELL || "/bin/sh";
   return new Promise((resolve) => {
     try {
-      const child = execFile(
+      const child = exec(
         shell,
-        ["-ilc", "echo __INKSTONE_PATH__$PATH"],
-        { timeout: timeoutMs, windowsHide: true },
+        ["-ilc", "printf __INKSTONE_PATH__; printenv PATH"],
+        { timeout: timeoutMs, killSignal: "SIGKILL", windowsHide: true },
         (err, stdout) => {
           if (err) return resolve(fallback);
           // Interactive shells may print banners; find our marker line.

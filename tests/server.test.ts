@@ -222,6 +222,95 @@ describe("InkStoneServer", () => {
     expect(remove).toHaveBeenCalled();
   });
 
+  it("ignores a late exit from the old child after restart()", async () => {
+    const first = new FakeChild();
+    const second = new FakeChild();
+    second.pid = 99;
+    const kids = [first, second];
+    const { deps, killTree } = makeDeps({
+      spawn: vi.fn(() => kids.shift()!) as any,
+    });
+    const server = new InkStoneServer(settings, deps);
+    await server.start();
+    await server.restart(); // killTree does not emit exit here
+    first.emit("exit", 0, null); // late exit of the OLD child
+    expect(server.status).toBe("running");
+    killTree.mockClear();
+    await server.stop();
+    expect(killTree).toHaveBeenCalledWith(99);
+    expect(server.status).toBe("stopped");
+  });
+
+  it("stop() waits for the exit event", async () => {
+    const { deps, child } = makeDeps({ sleep: () => new Promise(() => {}) });
+    const server = new InkStoneServer(settings, deps);
+    await server.start();
+    let done = false;
+    const p = server.stop().then(() => (done = true));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(done).toBe(false);
+    child.emit("exit", 0, null);
+    await p;
+    expect(server.status).toBe("stopped");
+  });
+
+  it("kills the tree when the child dies on its own", async () => {
+    const { deps, child, killTree } = makeDeps();
+    const server = new InkStoneServer(settings, deps);
+    await server.start();
+    child.emit("exit", null, "SIGKILL");
+    expect(server.status).toBe("crashed");
+    expect(killTree).toHaveBeenCalledWith(4242);
+  });
+
+  it("a second start() while starting returns the same promise", async () => {
+    let release!: (n: number) => void;
+    const { deps, spawn } = makeDeps({
+      pickPort: () => new Promise<number>((r) => (release = r)),
+    });
+    const server = new InkStoneServer(settings, deps);
+    const a = server.start();
+    const b = server.start();
+    release(5555);
+    expect(await b).toEqual(await a);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("stop() before spawn cancels the start", async () => {
+    let release!: (n: number) => void;
+    const { deps, spawn } = makeDeps({
+      pickPort: () => new Promise<number>((r) => (release = r)),
+    });
+    const server = new InkStoneServer(settings, deps);
+    const a = server.start();
+    const failed = a.catch((e) => e);
+    await server.stop();
+    release(5555);
+    expect(await failed).toBeInstanceOf(Error);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(server.status).toBe("stopped");
+  });
+
+  it("stop() after spawn mid-start ends stopped, not crashed", async () => {
+    const { deps, child, killTree, probe } = makeDeps({
+      sleep: () => new Promise((r) => setImmediate(r)),
+    });
+    probe.mockImplementation(async () => {
+      throw new Error("ECONNREFUSED");
+    });
+    killTree.mockImplementation(() => child.emit("exit", null, "SIGKILL"));
+    const server = new InkStoneServer(settings, deps);
+    const seen: string[] = [];
+    server.on("status", (s) => seen.push(s));
+    const a = server.start().catch((e) => e);
+    await new Promise((r) => setImmediate(r));
+    await server.stop();
+    expect(await a).toBeInstanceOf(Error);
+    expect(server.status).toBe("stopped");
+    expect(seen).not.toContain("crashed");
+  });
+
   it("tracks owner unlock", () => {
     const { deps } = makeDeps();
     const server = new InkStoneServer(settings, deps);

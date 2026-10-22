@@ -47,6 +47,7 @@ export const OUTDATED_MESSAGE =
   "This InkStone checkout is too old: update InkStone to >= 1.57.0.";
 const READY_TIMEOUT_MS = 60_000;
 const POLL_MS = 250;
+const STOP_WAIT_MS = 2000;
 const STDERR_LIMIT = 8192;
 
 export function pickFreePort(): Promise<number> {
@@ -117,7 +118,9 @@ function probeReal(url: string): Promise<number> {
 
 /**
  * Orphan protection. Covers: window close/reload (beforeunload, pagehide),
- * normal Node exit, and SIGTERM/SIGHUP. NOT coverable: a hard kill of
+ * normal Node exit. Signal handlers are deliberately NOT installed: a
+ * SIGTERM/SIGHUP listener removes Node's default terminate action. NOT
+ * covered: a hard kill of
  * Obsidian (SIGKILL, crash, Task Manager "End task") gives no code a chance
  * to run, and the detached process group / taskkill tree is not tied to the
  * parent's lifetime. The next start() therefore uses a fresh random port and
@@ -131,14 +134,10 @@ function installExitHooksReal(cleanup: () => void): () => void {
   w?.addEventListener("beforeunload", onExit);
   w?.addEventListener("pagehide", onExit);
   process.on("exit", onExit);
-  process.on("SIGTERM", onExit);
-  process.on("SIGHUP", onExit);
   return () => {
     w?.removeEventListener("beforeunload", onExit);
     w?.removeEventListener("pagehide", onExit);
     process.off("exit", onExit);
-    process.off("SIGTERM", onExit);
-    process.off("SIGHUP", onExit);
   };
 }
 
@@ -168,7 +167,10 @@ export class InkStoneServer {
   private listeners: Listener[] = [];
   private child: ChildLike | null = null;
   private port = 0;
-  private stopping = false;
+  private gen = 0;
+  private startPromise: Promise<{ port: number; baseUrl: string }> | null =
+    null;
+  private childExit: Promise<void> | null = null;
   private removeHooks: (() => void) | null = null;
   private deps: ServerDeps;
 
@@ -207,50 +209,65 @@ export class InkStoneServer {
     this._stderr = (this._stderr + text).slice(-STDERR_LIMIT);
   }
 
-  async start(): Promise<{ port: number; baseUrl: string }> {
-    if (this._status === "starting" || this._status === "running") {
-      return { port: this.port, baseUrl: `http://127.0.0.1:${this.port}` };
+  start(): Promise<{ port: number; baseUrl: string }> {
+    if (this.startPromise) return this.startPromise;
+    if (this._status === "running") {
+      return Promise.resolve({
+        port: this.port,
+        baseUrl: `http://127.0.0.1:${this.port}`,
+      });
     }
+    const p = this.doStart().finally(() => {
+      if (this.startPromise === p) this.startPromise = null;
+    });
+    this.startPromise = p;
+    return p;
+  }
+
+  private async doStart(): Promise<{ port: number; baseUrl: string }> {
     const d = this.deps;
+    const gen = ++this.gen;
+    const cancelled = () => this.gen !== gen;
+    const cancelError = () => new Error("InkStone start was cancelled.");
+    let child: ChildLike | null = null;
     this._stderr = "";
-    this.stopping = false;
     this.setStatus("starting");
     try {
-      this.port = await d.pickPort();
-      const baseUrl = `http://127.0.0.1:${this.port}`;
-      const env = buildServerEnv(
-        this.settings,
-        this.port,
-        this.token,
-        d.baseEnv,
-      );
+      const port = await d.pickPort();
+      if (cancelled()) throw cancelError();
+      this.port = port;
+      const baseUrl = `http://127.0.0.1:${port}`;
+      const env = buildServerEnv(this.settings, port, this.token, d.baseEnv);
       env.PATH = await d.getPath(d.platform);
+      if (cancelled()) throw cancelError();
       const python =
         this.settings.pythonPath ||
         defaultPythonPath(this.settings.inkstoneCheckout, d.platform);
-      d.log(`starting server on port ${this.port}`);
-      const child = d.spawn(python, ["app.py"], {
+      d.log(`starting server on port ${port}`);
+      const c = d.spawn(python, ["app.py"], {
         cwd: this.settings.inkstoneCheckout,
         env,
         detached: d.platform !== "win32",
         windowsHide: true,
       });
-      this.child = child;
+      child = c;
+      this.child = c;
       let spawnError: Error | null = null;
       let exited = false;
-      child.stdout?.on("data", () => {});
-      child.stderr?.on("data", (c) => this.appendStderr(c));
-      child.on("error", (e) => {
-        spawnError = e;
-        exited = true;
-        this.onChildGone();
+      this.childExit = new Promise<void>((resolve) => {
+        const gone = (e?: Error) => {
+          if (e) spawnError = e;
+          exited = true;
+          resolve();
+          this.onChildGone(c);
+        };
+        c.on("error", (e) => gone(e));
+        c.on("exit", () => gone());
       });
-      child.on("exit", () => {
-        exited = true;
-        this.onChildGone();
-      });
-      if (child.pid !== undefined) {
-        const pid = child.pid;
+      c.stdout?.on("data", () => {});
+      c.stderr?.on("data", (b) => this.appendStderr(b));
+      if (c.pid !== undefined) {
+        const pid = c.pid;
         this.removeHooks = d.installExitHooks(() => d.killTree(pid));
       }
 
@@ -263,6 +280,7 @@ export class InkStoneServer {
         } catch {
           code = 0;
         }
+        if (cancelled()) throw cancelError();
         if (exited) {
           const err = spawnError as Error | null;
           throw new Error(
@@ -273,47 +291,53 @@ export class InkStoneServer {
         }
         if (code === 200) {
           this.setStatus("running");
-          return { port: this.port, baseUrl };
+          return { port, baseUrl };
         }
         if (code === 404) throw new Error(OUTDATED_MESSAGE);
         await d.sleep(POLL_MS);
+        if (cancelled()) throw cancelError();
         waited += POLL_MS;
       }
       throw new Error("InkStone did not become ready in time.");
     } catch (e) {
-      this.killChild();
-      this.setStatus("crashed");
+      if (!cancelled()) {
+        if (child && this.child === child) this.dropChild(child);
+        this.setStatus("crashed");
+      }
       throw e;
     }
   }
 
-  private onChildGone(): void {
-    this.child = null;
+  /** Kills the tree and forgets the child so later events are ignored. */
+  private dropChild(child: ChildLike): void {
+    if (this.child === child) this.child = null;
     this.removeHooks?.();
     this.removeHooks = null;
-    if (this.stopping) {
-      this.setStatus("stopped");
-    } else if (this._status !== "stopped") {
-      this.setStatus("crashed");
-    }
+    if (child.pid !== undefined) this.deps.killTree(child.pid);
   }
 
-  private killChild(): void {
-    const pid = this.child?.pid;
-    if (pid !== undefined) this.deps.killTree(pid);
-    this.removeHooks?.();
-    this.removeHooks = null;
+  private onChildGone(child: ChildLike): void {
+    // Late events from a previous child (after stop/restart) are ignored.
+    if (this.child !== child) return;
+    // The reloader parent may die alone; make sure its child dies too.
+    this.dropChild(child);
+    if (this._status !== "stopped") this.setStatus("crashed");
   }
 
   async stop(): Promise<void> {
-    if (!this.child) {
+    this.gen++; // cancels any start still awaiting
+    this.startPromise = null;
+    const child = this.child;
+    if (!child) {
       if (this._status !== "stopped") this.setStatus("stopped");
       return;
     }
-    this.stopping = true;
-    this.killChild();
-    this.child = null;
+    const exitP = this.childExit;
+    this.dropChild(child);
     this.setStatus("stopped");
+    if (exitP) {
+      await Promise.race([exitP, this.deps.sleep(STOP_WAIT_MS)]);
+    }
   }
 
   async restart(): Promise<void> {
