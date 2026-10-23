@@ -40,13 +40,13 @@ The site folder works the same way InkStone's vault does: files at the top level
 
 You can start with an empty folder. The plugin writes the notes for you, and the preview shows each one as you go. It only ever writes frontmatter into new notes, apart from the translations note, which also gets its list of strings. It never edits an existing note, except to insert a link when you ask it to. Creating notes needs the **site folder to be inside the vault**; a site folder outside the vault still previews, but the create commands are off.
 
-**First run.** If no InkStone checkout or site folder is set, the pane says "Set up InkStone" and points you to the settings. Once both are set and the site folder has no homepage, it says "This site has no homepage yet" and offers a **Create homepage** button. After that, the pane's empty state offers buttons for the other note types.
+**First run.** If no InkStone checkout or site folder is set, the pane says "Set up InkStone" and points you to the settings. Once both are set and the site folder has no homepage, it says "This site has no homepage yet" and offers a **Create homepage** button. After that, with no note open, the pane offers buttons for a page, book, listing, feed or secondary homepage. Every create action is also in the **Create note** menu (the file-plus icon in the preview's header) and in the command palette.
 
-**Commands.** Each one opens a small form, writes one new note and opens it:
+**Commands.** They're in the command palette and in the **Create note** menu. Most open a small form, write one new note and open it. **Create translations note** only asks for a language and writes the note. Two cases write two notes: a homepage with a site language other than English also gets that language's translations note, and so does a language variant when **Also create translations note** is ticked. If a translations note for the language already exists, it's reused.
 
 | Command | What it writes |
 | --- | --- |
-| Create homepage | A `type: homepage` note at the site root. Asks for the site language, default theme, and whether to show Search and Tags links. |
+| Create homepage | A `type: homepage` note at the site root. Asks for the site language, default theme, and whether to show Search and Tags links. If the site already has a homepage, the form says so and makes a section homepage in a subfolder instead. |
 | Create page | A regular page, with optional tags and summary. |
 | Create book | A page with `type: book`. |
 | Create listing | A `type: listing` index for a folder (cards for every post in it). |
@@ -55,15 +55,15 @@ You can start with an empty folder. The plugin writes the notes for you, and the
 | Create translations note | The UI strings for one language (see below). |
 | Create language variant | A translated copy of the open note (see below). |
 
-You pick the folder (the current one, an existing one, or a new one inside the site folder). The title is kept exactly as you type it. The filename drops characters that aren't allowed in file names. If you tick **Insert a link to it in the open note**, a wiki link is added at the cursor of the note you had open.
+You pick the folder (the current one, an existing one, or a new one inside the site folder). The title is kept exactly as you type it. The filename drops characters that aren't allowed in file names. If you tick **Insert a link to it in the open note**, a wiki link is added at the cursor of the note you had open. Selected text is left alone; the link goes right after it.
 
 **Private pages.** Switch on **Private** and the page isn't published (`website: true` is left out). It gets an `access_token:` instead, and you share it as `/slug?token=...`. **The token is stored in plain text in the note.** If the site folder is in a public git repo, anyone can read it. Use private pages only when the repo is private. A private page never goes in the navigation.
 
 **Navigation.** A page or book created at the site root (and not Private) gets an **Add to navigation** checkbox, which writes `menu_order` so the page is pinned to the top bar. A listing, feed or secondary homepage in a top-level section folder already appears in the bar, so for those the checkbox reads **Hide from navigation** and writes `nav_hidden: true`. Elsewhere there's no checkbox. The page stays reachable by its link.
 
-**Languages.** A language variant copies the open note's `website`, `title`, `slug`, `date`, `tags`, `summary` and `type`, and adds `lang:`. It's served at `/{slug}/{lang}`, and InkStone adds the language toggle. Set `slug:` in the original note before you translate a variant's title. InkStone derives the slug from the title otherwise, and the two variants would stop matching. A translations note holds the site's interface strings (Search, Tags, Read more...) for one language. Russian is bundled, so a Russian note comes pre-filled. For any other language you get the key list to fill in. Tick **Also create translations note** in the variant form to make both at once; an existing one for that language is reused.
+**Languages.** A language variant copies the open note's `website`, `title`, `slug`, `date`, `tags`, `summary` and `type`, and adds `lang:`. It opens beside the original. It's served at `/{slug}/{lang}`, and InkStone adds the language toggle. Set `slug:` in the original note before you translate a variant's title. InkStone derives the slug from the title otherwise, and the two variants would stop matching. A translations note holds the site's interface strings (Search, Tags, Read more...) for one language. Russian is bundled, so a Russian note comes pre-filled. For any other language you get the key list to fill in. Tick **Also create translations note** in the variant form to make both at once; an existing one for that language is reused.
 
-**Git, from nothing.** In the git panel, a folder that isn't a repo shows **Initialize repository**, and a repo without a remote shows a **Remote URL** field with **Set remote**. After that, Commit and Push work as described below.
+**Git, from nothing.** In the git panel, a folder that isn't a repo shows **Initialize repository**, and a repo without a remote shows a **Remote URL** field with **Set remote**. It takes an `https://`, `ssh://` or `git://` URL, or the short `git@host:user/repo.git` form; local paths and git's helper transports (`ext::`, `file:`) are refused. After that, Commit and Push work as described below.
 
 ## Deploy
 
@@ -124,7 +124,7 @@ Hover a disabled button to see why. The preview works in every state. A few deta
 Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 
 - **Network use.** The plugin itself doesn't contact any remote service. It talks only to the InkStone server it starts on `127.0.0.1`. Two things can still reach the network on your behalf: the pages InkStone renders can load whatever your site's theme and settings include (for example Giscus comments or web fonts), and the git panel runs your own `git`, which contacts your git remote when you click Pull or Push.
-- **Files outside your vault.** [InkStone](https://github.com/airenare/inkstone) is a separate program, so the plugin has to reach outside the vault. It reads the **site folder** you choose, which can be anywhere on disk. It checks the **InkStone folder** (`app.py` and `VERSION`) and runs Python from it. It runs `git` in the site folder, and only changes anything when you click Commit, Pull or Push. The plugin never edits your notes itself, apart from the new notes you ask it to create and a link you ask it to insert.
+- **Files outside your vault.** [InkStone](https://github.com/airenare/inkstone) is a separate program, so the plugin has to reach outside the vault. It reads the **site folder** you choose, which can be anywhere on disk. It checks the **InkStone folder** (`app.py` and `VERSION`) and runs Python from it. It runs `git` in the site folder, and only changes anything when you click Initialize repository, Set remote, Commit, Pull or Push. The plugin never edits your notes itself, apart from the new notes you ask it to create and a link you ask it to insert.
 - **Runs other programs.** It starts your Python (running InkStone) and `git` as child processes. Both are stopped when Obsidian closes.
 - **No account, payment, ads or telemetry.** The plugin sends nothing anywhere, and it never installs or updates itself or any dependency.
 - **Open source.** MIT licensed, readable source, no obfuscation.
