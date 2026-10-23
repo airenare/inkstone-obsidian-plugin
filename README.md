@@ -10,7 +10,7 @@ Edit a note on the left. See the real page on the right.
 - **Private notes, both ways.** The preview shows what a visitor sees. Flip on **Owner view** to see the content as the site owner.
 - **Git without leaving Obsidian.** Pull, review diffs, commit and push your site folder from inside Obsidian, using the git setup you already have. No tokens to paste.
 
-> **Early release (0.x).** It's been tested by the author on macOS. Linux and Windows are supported in the code and covered by unit tests, but nobody has run them live yet. Expect a few rough edges, and please [open an issue](https://github.com/airenare/inkstone-obsidian-plugin/issues) when you hit one.
+> **Early release (0.x).** It's been tested by the author on macOS and Linux. Windows is supported in the code and covered by unit tests, but nobody has run it live yet. Expect a few rough edges, and please [open an issue](https://github.com/airenare/inkstone-obsidian-plugin/issues) when you hit one.
 
 ## Requirements
 
@@ -95,6 +95,7 @@ Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 - **Runs other programs.** It starts your Python (running InkStone) and `git` as child processes. Both are stopped when Obsidian closes.
 - **No account, payment, ads or telemetry.** The plugin sends nothing anywhere, and it never installs or updates itself or any dependency.
 - **Open source.** MIT licensed, readable source, no obfuscation.
+- **Platforms.** Desktop only. Tested on macOS and Linux; Windows is untested.
 - **Not affiliated with Obsidian.** InkStone Preview is an independent community plugin.
 
 ## Troubleshooting
@@ -112,7 +113,7 @@ Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 
 - On InkStone 1.57.x, a hard-killed Obsidian (crash or force-quit) can leave the local server running until you end it yourself. InkStone 1.58.0 and newer shut the server down with Obsidian in every case.
 - A `.env` file in the InkStone checkout that sets `URL_PATH_PREFIX` isn't supported.
-- Linux and Windows haven't been run live yet. Reports are welcome.
+- Windows hasn't been run live yet. Reports are welcome.
 
 ## Development
 
