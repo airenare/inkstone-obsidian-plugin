@@ -144,7 +144,7 @@ function toFmValue(v: unknown): FmValue {
   ) {
     return v;
   }
-  return String(v);
+  return undefined;
 }
 
 export function buildVariant(

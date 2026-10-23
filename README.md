@@ -36,6 +36,39 @@ Edit a note on the left. See the real page on the right.
 
 The site folder works the same way InkStone's vault does: files at the top level become `/slug`, a `blog/` folder becomes `/blog/...`, and so on.
 
+## Build a site from scratch
+
+You can start with an empty folder. The plugin writes the notes for you, and the preview shows each one as you go. It only ever writes frontmatter (plus a starter heading) into new notes. It never edits an existing note, except to insert a link when you ask it to. Creating notes needs the **site folder to be inside the vault**; a site folder outside the vault still previews, but the create commands are off.
+
+**First run.** If no InkStone checkout or site folder is set, the pane says "Set up InkStone" and points you to the settings. Once both are set and the site folder has no homepage, it says "This site has no homepage yet" and offers a **Create homepage** button. After that, the pane's empty state offers buttons for the other note types.
+
+**Commands.** Each one opens a small form, writes one new note and opens it:
+
+| Command | What it writes |
+| --- | --- |
+| Create homepage | A `type: homepage` note at the site root. Asks for the site language, default theme, and whether to show Search and Tags links. |
+| Create page | A regular page, with optional tags and summary. |
+| Create book | A page with `type: book`. |
+| Create listing | A `type: listing` index for a folder (cards for every post in it). |
+| Create feed | A `type: feed` stream for a folder (excerpts with "Read more"). |
+| Create secondary homepage | A homepage for a section folder, with its own site title, icon and theme. The icon is a plain text field: a path relative to the vault, such as `_attachments/logo.png`. |
+| Create translations note | The UI strings for one language (see below). |
+| Create language variant | A translated copy of the open note (see below). |
+
+You pick the folder (the current one, an existing one, or a new one inside the site folder). The title is kept exactly as you type it. The filename drops characters that aren't allowed in file names. If you tick **Insert a link to it in the open note**, a wiki link is added at the cursor of the note you had open.
+
+**Private pages.** Switch on **Private** and the page isn't published (`website: true` is left out). It gets an `access_token:` instead, and you share it as `/slug?token=...`. **The token is stored in plain text in the note.** If the site folder is in a public git repo, anyone can read it. Use private pages only when the repo is private. A private page never goes in the navigation.
+
+**Navigation.** Pages, books and the like get an **Add to navigation** checkbox, which writes `menu_order` so the page is pinned to the top bar. Listings, feeds and secondary homepages already appear in the bar, so for those the checkbox reads **Hide from navigation** and writes `nav_hidden: true`. The page stays reachable by its link.
+
+**Languages.** A language variant copies the open note's `website`, `title`, `slug`, `date`, `tags`, `summary` and `type`, and adds `lang:`. It's served at `/{slug}/{lang}`, and InkStone adds the language toggle. Set `slug:` in the original note before you translate a variant's title. InkStone derives the slug from the title otherwise, and the two variants would stop matching. A translations note holds the site's interface strings (Search, Tags, Read more...) for one language. Russian is bundled, so a Russian note comes pre-filled. For any other language you get the key list to fill in. Tick **Also create translations note** in the variant form to make both at once; an existing one for that language is reused.
+
+**Git, from nothing.** In the git panel, a folder that isn't a repo shows **Initialize repository**, and a repo without a remote shows a **Remote URL** field with **Set remote**. After that, Commit and Push work as described below.
+
+## Deploy
+
+The plugin doesn't deploy anything. When the site is in a git repo with a remote, deploying is InkStone's job: run the InkStone Docker image on Coolify or any Docker host, set `VAULT_REPO` to the repo's URL so the image clones it, and point a GitHub webhook at `/webhook` (with `WEBHOOK_SECRET`) so a push updates the live site. The details are in [InkStone's docs](https://github.com/airenare/inkstone), under Docker and Production Deployment.
+
 ## Settings
 
 | Setting | What it does |
@@ -91,7 +124,7 @@ Hover a disabled button to see why. The preview works in every state. A few deta
 Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 
 - **Network use.** The plugin itself doesn't contact any remote service. It talks only to the InkStone server it starts on `127.0.0.1`. Two things can still reach the network on your behalf: the pages InkStone renders can load whatever your site's theme and settings include (for example Giscus comments or web fonts), and the git panel runs your own `git`, which contacts your git remote when you click Pull or Push.
-- **Files outside your vault.** [InkStone](https://github.com/airenare/inkstone) is a separate program, so the plugin has to reach outside the vault. It reads the **site folder** you choose, which can be anywhere on disk. It checks the **InkStone folder** (`app.py` and `VERSION`) and runs Python from it. It runs `git` in the site folder, and only changes anything when you click Commit, Pull or Push. The plugin never edits your notes itself.
+- **Files outside your vault.** [InkStone](https://github.com/airenare/inkstone) is a separate program, so the plugin has to reach outside the vault. It reads the **site folder** you choose, which can be anywhere on disk. It checks the **InkStone folder** (`app.py` and `VERSION`) and runs Python from it. It runs `git` in the site folder, and only changes anything when you click Commit, Pull or Push. The plugin never edits your notes itself, apart from the new notes you ask it to create and a link you ask it to insert.
 - **Runs other programs.** It starts your Python (running InkStone) and `git` as child processes. Both are stopped when Obsidian closes.
 - **No account, payment, ads or telemetry.** The plugin sends nothing anywhere, and it never installs or updates itself or any dependency.
 - **Open source.** MIT licensed, readable source, no obfuscation.
