@@ -116,6 +116,17 @@ describe("buildNote", () => {
 });
 
 describe("buildVariant", () => {
+  it("drops object-valued fields instead of stringifying them", () => {
+    let s = "";
+    expect(() => {
+      s = buildVariant(
+        { title: { a: "b" }, summary: { c: 1 }, slug: "t" },
+        "ru",
+      );
+    }).not.toThrow();
+    expect(s).toBe("---\nslug: t\nlang: ru\n---\n");
+  });
+
   it("keeps allowed keys and appends lang", () => {
     const s = buildVariant(
       {

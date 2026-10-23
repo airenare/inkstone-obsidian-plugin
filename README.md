@@ -38,7 +38,7 @@ The site folder works the same way InkStone's vault does: files at the top level
 
 ## Build a site from scratch
 
-You can start with an empty folder. The plugin writes the notes for you, and the preview shows each one as you go. It only ever writes frontmatter (plus a starter heading) into new notes. It never edits an existing note, except to insert a link when you ask it to. Creating notes needs the **site folder to be inside the vault**; a site folder outside the vault still previews, but the create commands are off.
+You can start with an empty folder. The plugin writes the notes for you, and the preview shows each one as you go. It only ever writes frontmatter into new notes, apart from the translations note, which also gets its list of strings. It never edits an existing note, except to insert a link when you ask it to. Creating notes needs the **site folder to be inside the vault**; a site folder outside the vault still previews, but the create commands are off.
 
 **First run.** If no InkStone checkout or site folder is set, the pane says "Set up InkStone" and points you to the settings. Once both are set and the site folder has no homepage, it says "This site has no homepage yet" and offers a **Create homepage** button. After that, the pane's empty state offers buttons for the other note types.
 
@@ -59,7 +59,7 @@ You pick the folder (the current one, an existing one, or a new one inside the s
 
 **Private pages.** Switch on **Private** and the page isn't published (`website: true` is left out). It gets an `access_token:` instead, and you share it as `/slug?token=...`. **The token is stored in plain text in the note.** If the site folder is in a public git repo, anyone can read it. Use private pages only when the repo is private. A private page never goes in the navigation.
 
-**Navigation.** Pages, books and the like get an **Add to navigation** checkbox, which writes `menu_order` so the page is pinned to the top bar. Listings, feeds and secondary homepages already appear in the bar, so for those the checkbox reads **Hide from navigation** and writes `nav_hidden: true`. The page stays reachable by its link.
+**Navigation.** A page or book created at the site root (and not Private) gets an **Add to navigation** checkbox, which writes `menu_order` so the page is pinned to the top bar. A listing, feed or secondary homepage in a top-level section folder already appears in the bar, so for those the checkbox reads **Hide from navigation** and writes `nav_hidden: true`. Elsewhere there's no checkbox. The page stays reachable by its link.
 
 **Languages.** A language variant copies the open note's `website`, `title`, `slug`, `date`, `tags`, `summary` and `type`, and adds `lang:`. It's served at `/{slug}/{lang}`, and InkStone adds the language toggle. Set `slug:` in the original note before you translate a variant's title. InkStone derives the slug from the title otherwise, and the two variants would stop matching. A translations note holds the site's interface strings (Search, Tags, Read more...) for one language. Russian is bundled, so a Russian note comes pre-filled. For any other language you get the key list to fill in. Tick **Also create translations note** in the variant form to make both at once; an existing one for that language is reused.
 
