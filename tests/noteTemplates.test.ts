@@ -20,6 +20,34 @@ describe("yamlString", () => {
   });
   it("leaves plain strings alone", () => {
     expect(yamlString("Plain title")).toBe("Plain title");
+    expect(yamlString("3 ways to cook")).toBe("3 ways to cook");
+    expect(yamlString("Yesterday")).toBe("Yesterday");
+  });
+  it("quotes YAML 1.1 booleans and null, any case", () => {
+    for (const w of [
+      "yes", "No", "ON", "off", "y", "N", "true", "False", "null", "NULL", "~",
+    ]) {
+      expect(yamlString(w)).toBe(`"${w}"`);
+    }
+  });
+  it("quotes numbers of every YAML flavor", () => {
+    for (const n of [
+      "2026", "1234", "0", "3.14", "1_000", "0x1F", "0o17", "0b101",
+      "1e5", "1.5e-3", ".5", ".inf", ".NaN", "+1", "1.",
+    ]) {
+      expect(yamlString(n)).toBe(`"${n}"`);
+    }
+  });
+  it("quotes anything that starts like a date", () => {
+    expect(yamlString("2026-10-23")).toBe('"2026-10-23"');
+    expect(yamlString("2026-10-23 notes")).toBe('"2026-10-23 notes"');
+  });
+  it("escapes newlines, carriage returns and tabs", () => {
+    expect(yamlString("a\nb")).toBe('"a\\nb"');
+    expect(yamlString("one\ntwo")).toBe('"one\\ntwo"');
+    expect(yamlString("one\ntwo\r\tthree")).toBe(
+      '"one\\ntwo\\r\\tthree"',
+    );
   });
 });
 
@@ -81,6 +109,21 @@ describe("buildNote", () => {
         "summary: S\nmenu_order: 2\n---\n",
     );
   });
+  it("quotes risky values but keeps date bare", () => {
+    const s = buildNote({
+      type: "page",
+      title: "2026",
+      date: "2026-10-23",
+      tags: ["true", "plain"],
+      summary: "Line one\nLine two",
+      privateToken: "1234",
+    });
+    expect(s).toBe(
+      '---\ntitle: "2026"\ndate: 2026-10-23\ntags:\n  - "true"\n' +
+        '  - plain\nsummary: "Line one\\nLine two"\n' +
+        'access_token: "1234"\n---\n',
+    );
+  });
   it("book writes type", () => {
     const s = buildNote({ type: "book", title: "B", date: "2026-10-23" });
     expect(s).toContain("type: book");
@@ -125,6 +168,25 @@ describe("buildVariant", () => {
       );
     }).not.toThrow();
     expect(s).toBe("---\nslug: t\nlang: ru\n---\n");
+  });
+
+  it("keeps only primitive array items", () => {
+    const s = buildVariant(
+      { tags: ["a", 2, true, { x: 1 }, null, ["n"]] },
+      "ru",
+    );
+    expect(s).toBe(
+      '---\ntags:\n  - a\n  - "2"\n  - "true"\nlang: ru\n---\n',
+    );
+  });
+
+  it("writes a source date bare", () => {
+    expect(buildVariant({ date: "2026-10-23" }, "ru")).toBe(
+      "---\ndate: 2026-10-23\nlang: ru\n---\n",
+    );
+    expect(buildVariant({ date: new Date(2026, 0, 5) }, "ru")).toBe(
+      "---\ndate: 2026-01-05\nlang: ru\n---\n",
+    );
   });
 
   it("keeps allowed keys and appends lang", () => {

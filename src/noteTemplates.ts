@@ -2,16 +2,39 @@ import { translationStrings } from "./translationStrings";
 
 export type FmValue = string | number | boolean | string[] | undefined;
 
-const SPECIAL = /[:#[\]{}&*!|>'"%@`,]/;
+const SPECIAL = /[:#[\]{}&*!|>'"%@`,\n\r\t]/;
+// Plain scalars that PyYAML (YAML 1.1) reads as something other than a
+// string: booleans, null, numbers in any base, and dates.
+const RESERVED = /^(y|n|yes|no|on|off|true|false|null|~)$/i;
+const NUMBER = new RegExp(
+  "^[-+]?(" +
+    "\\d[\\d_]*(\\.[\\d_]*)?([eE][-+]?\\d+)?" +
+    "|\\.\\d[\\d_]*([eE][-+]?\\d+)?" +
+    "|0x[\\da-f_]+|0o[0-7_]+|0b[01_]+" +
+    "|\\.inf|\\.nan" +
+    ")$",
+  "i",
+);
+const DATE_START = /^\d{4}-\d\d-\d\d/;
+const ISO_DATE = /^\d{4}-\d\d-\d\d$/;
 
 export function yamlString(v: string): string {
   const needsQuote =
     v === "" ||
     SPECIAL.test(v) ||
     /^[-? ]/.test(v) ||
-    v.endsWith(" ");
+    v.endsWith(" ") ||
+    RESERVED.test(v) ||
+    NUMBER.test(v) ||
+    DATE_START.test(v);
   if (!needsQuote) return v;
-  return `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  const escaped = v
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+  return `"${escaped}"`;
 }
 
 export function renderFrontmatter(
@@ -24,7 +47,9 @@ export function renderFrontmatter(
       lines.push(`${key}:`);
       for (const item of value) lines.push(`  - ${yamlString(item)}`);
     } else if (typeof value === "string") {
-      lines.push(`${key}: ${yamlString(value)}`);
+      // A date stays bare, so Obsidian Properties keeps it a date.
+      const bare = key === "date" && ISO_DATE.test(value);
+      lines.push(`${key}: ${bare ? value : yamlString(value)}`);
     } else {
       lines.push(`${key}: ${String(value)}`);
     }
@@ -136,7 +161,16 @@ const VARIANT_KEYS = [
 function toFmValue(v: unknown): FmValue {
   if (v === undefined || v === null) return undefined;
   if (v instanceof Date) return todayIso(v);
-  if (Array.isArray(v)) return v.map((x) => String(x));
+  if (Array.isArray(v)) {
+    return v
+      .filter(
+        (x): x is string | number | boolean =>
+          typeof x === "string" ||
+          typeof x === "number" ||
+          typeof x === "boolean",
+      )
+      .map((x) => String(x));
+  }
   if (
     typeof v === "string" ||
     typeof v === "number" ||

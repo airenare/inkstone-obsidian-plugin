@@ -346,12 +346,29 @@ export class GitService {
   }
 }
 
-/** Error message for an unusable remote URL, or null when it looks fine. */
+const URL_REMOTE = /^(https?|ssh|git):\/\/[^/]+/i;
+const SCP_REMOTE = /^[^@/:]+@[^@/:]+:.+$/;
+
+/**
+ * Error message for an unusable remote URL, or null when it looks fine.
+ * Only https, http, ssh, git and scp-style `user@host:path` are allowed:
+ * git's helper transports (`ext::`, `fd::`) and `file:` can run local
+ * commands or read local paths, so they are refused.
+ */
 export function validateRemoteUrl(url: string): string | null {
   const u = url.trim();
   if (u === "") return "Enter a remote URL.";
+  if ([...u].some((c) => c.charCodeAt(0) < 0x20 || c === "\x7f")) {
+    return "A remote URL cannot contain control characters.";
+  }
   if (/\s/.test(u)) return "A remote URL cannot contain spaces.";
   if (u.startsWith("-")) return "A remote URL cannot start with a dash.";
+  if (u.includes("::") || /^file:/i.test(u)) {
+    return "Use an https, ssh or git URL.";
+  }
+  if (!URL_REMOTE.test(u) && !SCP_REMOTE.test(u)) {
+    return "Use an https, ssh or git URL, such as git@github.com:you/site.git.";
+  }
   return null;
 }
 

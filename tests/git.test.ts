@@ -6,6 +6,7 @@ import * as net from "net";
 import * as os from "os";
 import * as path from "path";
 import { GitError, GitService, validateRemoteUrl } from "../src/git";
+import { canInit } from "../src/gitPanelState";
 
 const BASE_ENV: NodeJS.ProcessEnv = {
   ...process.env,
@@ -102,6 +103,16 @@ describe("GitService.state", () => {
       hasRemote: true,
       branch: null,
     });
+  });
+
+  it("site folder inside a bigger repo is a repo (no init)", async () => {
+    const root = path.join(tmp, "big");
+    initRepo(root);
+    const site = path.join(root, "site");
+    fs.mkdirSync(site);
+    const st = await svc(site).state();
+    expect(st).toEqual({ kind: "repo", hasRemote: false, branch: "main" });
+    expect(canInit(st)).toBe(false);
   });
 
   it("throws a clear GitError when git is missing", async () => {
@@ -435,6 +446,44 @@ describe("validateRemoteUrl", () => {
   it("accepts ssh and https urls", () => {
     expect(validateRemoteUrl("git@github.com:u/r.git")).toBeNull();
     expect(validateRemoteUrl("https://github.com/u/r.git")).toBeNull();
+  });
+
+  it("accepts http, ssh:// and git:// urls", () => {
+    expect(validateRemoteUrl("http://example.com/r.git")).toBeNull();
+    expect(validateRemoteUrl("ssh://git@example.com/u/r.git")).toBeNull();
+    expect(validateRemoteUrl("ssh://git@example.com:2222/r.git")).toBeNull();
+    expect(validateRemoteUrl("git://example.com/r.git")).toBeNull();
+    expect(validateRemoteUrl("HTTPS://github.com/u/r.git")).toBeNull();
+  });
+
+  it("rejects helper transports", () => {
+    expect(validateRemoteUrl("ext::sh")).not.toBeNull();
+    expect(validateRemoteUrl("fd::17")).not.toBeNull();
+    expect(validateRemoteUrl("https::github.com/u/r")).not.toBeNull();
+    expect(validateRemoteUrl("git@host::path")).not.toBeNull();
+    expect(validateRemoteUrl("https://x.com/a::b")).not.toBeNull();
+  });
+
+  it("rejects file urls and local paths", () => {
+    expect(validateRemoteUrl("file:///tmp/r.git")).not.toBeNull();
+    expect(validateRemoteUrl("FILE:///tmp/r.git")).not.toBeNull();
+    expect(validateRemoteUrl("/tmp/r.git")).not.toBeNull();
+    expect(validateRemoteUrl("../r.git")).not.toBeNull();
+  });
+
+  it("rejects control characters", () => {
+    expect(validateRemoteUrl("https://x.com/r\u0000")).not.toBeNull();
+    expect(validateRemoteUrl("https://x.com/\u001br")).not.toBeNull();
+    expect(validateRemoteUrl("https://x.com/r\u007f")).not.toBeNull();
+    expect(validateRemoteUrl("https://x.com/\nr")).not.toBeNull();
+  });
+
+  it("rejects other schemes and malformed scp-style", () => {
+    expect(validateRemoteUrl("ftp://example.com/r.git")).not.toBeNull();
+    expect(validateRemoteUrl("https://")).not.toBeNull();
+    expect(validateRemoteUrl("git@github.com")).not.toBeNull();
+    expect(validateRemoteUrl("git@github.com:")).not.toBeNull();
+    expect(validateRemoteUrl("-u@h:p")).not.toBeNull();
   });
 });
 

@@ -1,5 +1,10 @@
 import { Notice } from "obsidian";
-import { GitError, validateRemoteUrl, type GitChange, type GitService } from "./git";
+import {
+  GitError,
+  validateRemoteUrl,
+  type GitChange,
+  type GitService,
+} from "./git";
 import {
   buttonStates,
   canInit,
