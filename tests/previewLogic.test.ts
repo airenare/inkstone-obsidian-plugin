@@ -360,3 +360,58 @@ describe("unpublishedPanel", () => {
     expect(p.body).toContain("isn't a page");
   });
 });
+
+import {
+  decideFirstRun,
+  firstRunPanel,
+  siteFolderInVault,
+} from "../src/previewLogic";
+
+describe("decideFirstRun", () => {
+  it("asks for setup when the plugin isn't configured", () => {
+    expect(decideFirstRun(false, false)).toBe("setup");
+    expect(decideFirstRun(false, true)).toBe("setup");
+  });
+  it("offers a homepage when the site has none", () => {
+    expect(decideFirstRun(true, false)).toBe("create-homepage");
+  });
+  it("is ready once a homepage exists", () => {
+    expect(decideFirstRun(true, true)).toBe("ready");
+  });
+});
+
+describe("firstRunPanel", () => {
+  it("points an unconfigured plugin at the settings", () => {
+    const p = firstRunPanel("setup");
+    expect(p.title).toBe("Set up InkStone");
+    expect(p.body).toBe(
+      "Choose your InkStone checkout and the site folder in the plugin " +
+        "settings. The site folder must be inside this vault to create " +
+        "notes from here.",
+    );
+  });
+  it("offers to create the homepage", () => {
+    const p = firstRunPanel("create-homepage");
+    expect(p.title).toBe("This site has no homepage yet");
+    expect(p.body).toBe(
+      "Every InkStone site starts with a homepage in the site folder. " +
+        "Create one to get started.",
+    );
+  });
+});
+
+describe("siteFolderInVault", () => {
+  it("is empty when the site folder is the vault root", () => {
+    expect(siteFolderInVault("/v", "/v")).toBe("");
+    expect(siteFolderInVault("/v/", "/v")).toBe("");
+  });
+  it("gives the vault path of a subfolder", () => {
+    expect(siteFolderInVault("/v", "/v/site")).toBe("site");
+    expect(siteFolderInVault("/v", "/v/a/b/")).toBe("a/b");
+    expect(siteFolderInVault("C:\\v", "C:\\v\\site")).toBe("site");
+  });
+  it("is null outside the vault", () => {
+    expect(siteFolderInVault("/v", "/other")).toBeNull();
+    expect(siteFolderInVault("/v", "/vault2/site")).toBeNull();
+  });
+});

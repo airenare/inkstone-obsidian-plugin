@@ -1,12 +1,14 @@
 import { BLANK_LINK_SCRIPT } from "./blankLinks";
 import { describeNavTiming } from "./trace";
 import {
+  debounce,
   FileView,
   ItemView,
   Notice,
   TFile,
   WorkspaceLeaf,
 } from "obsidian";
+import type { CreateType } from "./createNoteLogic";
 import { GitPanel } from "./gitPanel";
 import { obsidianFetcher } from "./obsidianFetcher";
 import {
@@ -15,6 +17,8 @@ import {
   decidePreviewTarget,
   displayUrl,
   externalOpenAllowed,
+  firstRunPanel,
+  type FirstRun,
   siteRelativePath,
   unpublishedPanel,
   vaultPathForSiteFile,
@@ -65,6 +69,20 @@ interface PanelSpec {
 
 const ERR_ABORTED = -3;
 const STDERR_LINES = 60;
+const SITE_SCAN_DEBOUNCE_MS = 500;
+
+/** The "Create ..." buttons on the empty pane of a site with a homepage. */
+const CREATE_BUTTONS: {
+  label: string;
+  type: CreateType;
+  secondary?: boolean;
+}[] = [
+  { label: "Create page", type: "page" },
+  { label: "Create listing", type: "listing" },
+  { label: "Create feed", type: "feed" },
+  { label: "Create book", type: "book" },
+  { label: "Create secondary homepage", type: "homepage", secondary: true },
+];
 
 function newPartition(): string {
   // Not "persist:", so cookies live in memory only and die with the view.
@@ -106,6 +124,8 @@ export class InkStonePreviewView extends ItemView {
   private activeFile: TFile | null = null;
   private missRefreshedFor: string | null = null;
   private lastEditorLeaf: WorkspaceLeaf | null = null;
+  /** First-run state as of the last evaluate; null before the first. */
+  private firstRun: FirstRun | null = null;
 
   private dotEl!: HTMLElement;
   private urlEl!: HTMLInputElement;
@@ -148,6 +168,18 @@ export class InkStonePreviewView extends ItemView {
     this.registerEvent(
       this.app.workspace.on("file-open", () => this.syncToActiveFile()),
     );
+    // A homepage created or removed changes the first-run state; the
+    // metadata cache (not the server) is what it is computed from.
+    const rescan = debounce(
+      () => this.onSiteNotesChanged(),
+      SITE_SCAN_DEBOUNCE_MS,
+      true,
+    );
+    const { metadataCache, vault } = this.app;
+    this.registerEvent(metadataCache.on("changed", rescan));
+    this.registerEvent(metadataCache.on("deleted", rescan));
+    this.registerEvent(metadataCache.on("resolved", rescan));
+    this.registerEvent(vault.on("rename", rescan));
 
     this.onServerStatus(this.plugin.server.status);
     void this.connect();
@@ -254,7 +286,10 @@ export class InkStonePreviewView extends ItemView {
       title: "InkStone isn't set up yet.",
       body: problem,
       error: true,
-      actions: [{ label: "Retry", onClick: () => void this.connect() }],
+      actions: [
+        { label: "Open settings", onClick: () => this.plugin.openSettings() },
+        { label: "Retry", onClick: () => void this.connect() },
+      ],
     });
   }
 
@@ -282,6 +317,11 @@ export class InkStonePreviewView extends ItemView {
   }
 
   private async doConnect(): Promise<void> {
+    if (!this.plugin.isConfigured()) {
+      this.firstRun = "setup";
+      this.showFirstRun("setup");
+      return;
+    }
     const res = await this.plugin.startServer();
     if (!res.ok) {
       // Start failures reach the view through the "crashed" status; a
@@ -325,10 +365,13 @@ export class InkStonePreviewView extends ItemView {
     const base = this.baseUrl;
     const map = this.map;
     if (!base || !map) return;
+    const firstRun = this.plugin.firstRunState();
+    this.firstRun = firstRun;
+    // No homepage yet: offer one wherever there is no page to show.
+    const noHomepage = firstRun === "create-homepage";
     if (!file) {
-      if (!this.currentUrl) {
-        this.showPanel({ title: "Open a note in the site folder to preview it." });
-      }
+      if (noHomepage) this.showFirstRun("create-homepage");
+      else if (!this.currentUrl) this.showEmptyPanel();
       return;
     }
     const vaultBase = this.vaultBase();
@@ -338,6 +381,10 @@ export class InkStonePreviewView extends ItemView {
     if (rel === null) {
       this.setPrivateBadge(false);
       this.targetPanel = true;
+      if (noHomepage) {
+        this.showFirstRun("create-homepage");
+        return;
+      }
       this.showPanel({
         title: "Not in the site folder",
         body: `"${file.name}" isn't part of the InkStone site.`,
@@ -359,11 +406,59 @@ export class InkStonePreviewView extends ItemView {
     if (target.kind !== "url") {
       this.setPrivateBadge(false);
       this.targetPanel = true;
-      this.showPanel(unpublishedPanel(file.name, file.extension));
+      if (noHomepage) this.showFirstRun("create-homepage");
+      else this.showPanel(unpublishedPanel(file.name, file.extension));
       return;
     }
     this.setPrivateBadge(!!entry?.private);
     this.navigate(base + target.url);
+  }
+
+  /** Notes changed: re-evaluate when the first-run state moved. */
+  private onSiteNotesChanged(): void {
+    if (this.firstRun === null || this.firstRun === "setup") return;
+    if (this.plugin.firstRunState() !== this.firstRun) this.evaluate();
+  }
+
+  private createDialog(type: CreateType, secondary?: boolean): void {
+    this.plugin.openCreateDialog(type, {
+      secondary,
+      leaf: this.lastEditorLeaf,
+    });
+  }
+
+  private showFirstRun(kind: "setup" | "create-homepage"): void {
+    const text = firstRunPanel(kind);
+    const actions: PanelAction[] =
+      kind === "setup"
+        ? [
+            {
+              label: "Open settings",
+              onClick: () => this.plugin.openSettings(),
+            },
+            { label: "Retry", onClick: () => void this.connect() },
+          ]
+        : [
+            {
+              label: "Create homepage",
+              onClick: () => this.createDialog("homepage"),
+            },
+          ];
+    this.showPanel({ ...text, actions });
+  }
+
+  /** No note open: say so, plus "Create ..." buttons when possible. */
+  private showEmptyPanel(): void {
+    const canCreate = this.plugin.siteRel() !== null;
+    this.showPanel({
+      title: "Open a note in the site folder to preview it.",
+      actions: canCreate
+        ? CREATE_BUTTONS.map((b) => ({
+            label: b.label,
+            onClick: () => this.createDialog(b.type, b.secondary),
+          }))
+        : undefined,
+    });
   }
 
   private sameTarget(a: string | null, b: string | null): boolean {

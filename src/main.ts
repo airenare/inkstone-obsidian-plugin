@@ -1,11 +1,33 @@
-import { FileSystemAdapter, Notice, Plugin, type TAbstractFile } from "obsidian";
+import {
+  App,
+  FileSystemAdapter,
+  MarkdownView,
+  Notice,
+  Plugin,
+  type TAbstractFile,
+  type TFile,
+  type WorkspaceLeaf,
+} from "obsidian";
 import {
   pathsToNotify,
   RELOAD_DEBOUNCE_MS,
   createReloadScheduler,
   type ReloadScheduler,
 } from "./autoReload";
+import { planCreation, type CreateType } from "./createNoteLogic";
+import { CreateNoteModal } from "./createNoteModal";
+import { executePlan } from "./createNotes";
 import { GitService } from "./git";
+import { LanguagePicker } from "./languagePicker";
+import { relativeToSite } from "./notePaths";
+import { todayIso } from "./noteTemplates";
+import {
+  decideFirstRun,
+  siteFolderInVault,
+  type FirstRun,
+} from "./previewLogic";
+import { hasRootHomepage, knownLanguages } from "./siteIndex";
+import { scanSite } from "./siteScan";
 import {
   realDeps as envDeps,
   validateEnvironment,
@@ -24,6 +46,54 @@ import {
 
 const GIT_REFRESH_DEBOUNCE_MS = 1000;
 const SETTINGS_RESTART_DEBOUNCE_MS = 1000;
+
+/** Obsidian's settings window; not in the public typings. */
+interface AppSettingWindow {
+  open(): void;
+  openTabById(id: string): void;
+}
+
+export interface CreateDialogOptions {
+  /** Never offer the site root (secondary homepage). */
+  secondary?: boolean;
+  /** Editor leaf to use when no Markdown view is active (the pane). */
+  leaf?: WorkspaceLeaf | null;
+}
+
+const CREATE_COMMANDS: {
+  id: string;
+  name: string;
+  type: CreateType;
+  secondary?: boolean;
+}[] = [
+  { id: "create-homepage", name: "Create homepage", type: "homepage" },
+  { id: "create-page", name: "Create page", type: "page" },
+  { id: "create-book", name: "Create book", type: "book" },
+  { id: "create-listing", name: "Create listing", type: "listing" },
+  { id: "create-feed", name: "Create feed", type: "feed" },
+  {
+    id: "create-secondary-homepage",
+    name: "Create secondary homepage",
+    type: "homepage",
+    secondary: true,
+  },
+  {
+    id: "create-translations-note",
+    name: "Create translations note",
+    type: "translations",
+  },
+  {
+    id: "create-language-variant",
+    name: "Create language variant",
+    type: "variant",
+  },
+];
+
+/** Vault path of a file's folder; "" for the vault root. */
+function folderOf(file: TFile): string {
+  const path = file.parent?.path ?? "";
+  return path === "/" ? "" : path;
+}
 
 export type StartResult =
   | { ok: true; baseUrl: string }
@@ -103,6 +173,14 @@ export default class InkStonePlugin extends Plugin {
       name: "Restart server",
       callback: () => void this.restartServer(),
     });
+    for (const c of CREATE_COMMANDS) {
+      this.addCommand({
+        id: c.id,
+        name: c.name,
+        callback: () =>
+          this.openCreateDialog(c.type, { secondary: c.secondary }),
+      });
+    }
     this.addSettingTab(new InkStoneSettingTab(this.app, this));
 
     this.app.workspace.onLayoutReady(() => {
@@ -161,6 +239,144 @@ export default class InkStonePlugin extends Plugin {
       this.vaultBasePath(),
       process.platform,
     );
+  }
+
+  /**
+   * The site folder as a vault path ("" for the vault root), or null when
+   * it is unset or lies outside the vault.
+   */
+  siteRel(): string | null {
+    const vaultBase = this.vaultBasePath();
+    const site = this.siteFolderPath();
+    if (!vaultBase || !site) return null;
+    return siteFolderInVault(vaultBase, site);
+  }
+
+  /** Both the InkStone checkout and a usable site folder are set. */
+  isConfigured(): boolean {
+    return (
+      this.settings.inkstoneCheckout.trim() !== "" &&
+      this.siteFolderPath() !== null
+    );
+  }
+
+  /**
+   * Which first-run state the preview pane is in. A site folder outside
+   * the vault can't be scanned, so it counts as ready (today's flows).
+   */
+  firstRunState(): FirstRun {
+    if (!this.isConfigured()) return "setup";
+    const siteRel = this.siteRel();
+    if (siteRel === null) return "ready";
+    const notes = scanSite(this.app, siteRel);
+    return decideFirstRun(true, hasRootHomepage(notes));
+  }
+
+  /** Opens Obsidian's settings on this plugin's tab. */
+  openSettings(): void {
+    const app = this.app as App & { setting?: AppSettingWindow };
+    if (!app.setting) {
+      new Notice("Open this plugin's tab in Obsidian's settings.");
+      return;
+    }
+    app.setting.open();
+    app.setting.openTabById(this.manifest.id);
+  }
+
+  /** The site folder as a vault path, or a Notice and null. */
+  private siteRelOrNotice(): string | null {
+    if (!this.settings.siteFolder.trim()) {
+      new Notice("Set the site folder in the plugin settings first.");
+      return null;
+    }
+    const siteRel = this.siteRel();
+    if (siteRel === null) {
+      new Notice(
+        "The site folder must be inside this vault to create notes.",
+      );
+    }
+    return siteRel;
+  }
+
+  /** The active Markdown view, else the given or most recent one. */
+  private markdownView(leaf?: WorkspaceLeaf | null): MarkdownView | null {
+    const { workspace } = this.app;
+    const active = workspace.getActiveViewOfType(MarkdownView);
+    if (active) return active;
+    if (leaf?.view instanceof MarkdownView) return leaf.view;
+    const recent = workspace.getMostRecentLeaf();
+    return recent?.view instanceof MarkdownView ? recent.view : null;
+  }
+
+  /** Opens the creation flow for a note type. */
+  openCreateDialog(type: CreateType, opts: CreateDialogOptions = {}): void {
+    const siteRel = this.siteRelOrNotice();
+    if (siteRel === null) return;
+    if (type === "translations") {
+      this.createTranslations(siteRel);
+      return;
+    }
+    const view = this.markdownView(opts.leaf);
+    const editor = view?.editor ?? null;
+    const file = view?.file ?? null;
+    const activeFolder = file ? folderOf(file) : null;
+    if (type === "variant") {
+      const rel = file ? relativeToSite(file.path, siteRel) : null;
+      if (!file || file.extension !== "md" || !rel) {
+        new Notice("Open a note in the site folder to create a variant.");
+        return;
+      }
+      const cache = this.app.metadataCache.getFileCache(file);
+      if (!cache) {
+        new Notice(
+          "Obsidian hasn't indexed this note yet. Try again in a moment.",
+        );
+        return;
+      }
+      const fm: Record<string, unknown> = { ...(cache.frontmatter ?? {}) };
+      const known = knownLanguages(scanSite(this.app, siteRel));
+      new LanguagePicker(this.app, known, (code) => {
+        new CreateNoteModal(this.app, {
+          type,
+          siteRel,
+          editor,
+          activeFolder,
+          variantSource: { path: file.path, fm },
+          language: code,
+        }).open();
+      }).open();
+      return;
+    }
+    new CreateNoteModal(this.app, {
+      type,
+      siteRel,
+      editor,
+      activeFolder,
+      secondary: opts.secondary,
+    }).open();
+  }
+
+  /** Picks a language, then writes its translations note directly. */
+  private createTranslations(siteRel: string): void {
+    const known = knownLanguages(scanSite(this.app, siteRel));
+    new LanguagePicker(this.app, known, (code) => {
+      // Scan again: the picker may have stayed open while notes changed.
+      const result = planCreation(
+        { type: "translations", name: "", folder: siteRel, language: code },
+        {
+          siteRel,
+          notes: scanSite(this.app, siteRel),
+          exists: (p) => this.app.vault.getAbstractFileByPath(p) !== null,
+          today: todayIso(),
+        },
+      );
+      if (!result.ok) {
+        new Notice(result.error);
+        return;
+      }
+      // executePlan reports success and failure with its own Notice.
+      void executePlan(this.app, result.plan, null);
+    }).open();
   }
 
   /** A git service for the site folder; null when none is set. */

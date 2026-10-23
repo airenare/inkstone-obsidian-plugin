@@ -205,3 +205,52 @@ export function unpublishedPanel(
     body: `"${fileName}" isn't a page; only notes, bases and canvases are.`,
   };
 }
+
+export type FirstRun = "setup" | "create-homepage" | "ready";
+
+/**
+ * What the pane needs before it can preview anything: settings first,
+ * then a root homepage. "ready" means the usual flows apply.
+ */
+export function decideFirstRun(
+  configured: boolean,
+  hasHomepage: boolean,
+): FirstRun {
+  if (!configured) return "setup";
+  return hasHomepage ? "ready" : "create-homepage";
+}
+
+/** Panel text for the two first-run states. */
+export function firstRunPanel(kind: "setup" | "create-homepage"): {
+  title: string;
+  body: string;
+} {
+  if (kind === "setup") {
+    return {
+      title: "Set up InkStone",
+      body:
+        "Choose your InkStone checkout and the site folder in the plugin " +
+        "settings. The site folder must be inside this vault to create " +
+        "notes from here.",
+    };
+  }
+  return {
+    title: "This site has no homepage yet",
+    body:
+      "Every InkStone site starts with a homepage in the site folder. " +
+      "Create one to get started.",
+  };
+}
+
+/**
+ * The site folder as a vault path ("" for the vault root), or null when
+ * it lies outside the vault. Both arguments are absolute.
+ */
+export function siteFolderInVault(
+  vaultBase: string,
+  siteFolder: string,
+): string | null {
+  const probe = vaultPathForSiteFile(vaultBase, siteFolder, "_");
+  if (probe === null) return null;
+  return probe === "_" ? "" : probe.slice(0, -2);
+}
