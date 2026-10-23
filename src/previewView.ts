@@ -1,4 +1,5 @@
 import { BLANK_LINK_SCRIPT } from "./blankLinks";
+import { describeNavTiming } from "./trace";
 import {
   FileView,
   ItemView,
@@ -419,9 +420,9 @@ export class InkStonePreviewView extends ItemView {
       void (async () => {
         try {
           const raw = await wv.executeJavaScript(
-            "JSON.stringify({fcp: (performance.getEntriesByType('paint').find(function (p) { return p.name === 'first-contentful-paint'; }) || {}).startTime, load: (performance.getEntriesByType('navigation')[0] || {}).loadEventEnd})",
+            "(function () { var n = performance.getEntriesByType('navigation')[0] || {}; var f = performance.getEntriesByType('paint').find(function (p) { return p.name === 'first-contentful-paint'; }); return JSON.stringify({startTime: n.startTime, redirectEnd: n.redirectEnd, fetchStart: n.fetchStart, domainLookupStart: n.domainLookupStart, domainLookupEnd: n.domainLookupEnd, connectStart: n.connectStart, connectEnd: n.connectEnd, requestStart: n.requestStart, responseStart: n.responseStart, responseEnd: n.responseEnd, domContentLoadedEventEnd: n.domContentLoadedEventEnd, loadEventEnd: n.loadEventEnd, fcp: f && f.startTime}); })()",
           );
-          this.plugin.trace.mark(`page reports (own clock): ${String(raw)}`);
+          this.plugin.trace.mark(`page timing: ${describeNavTiming(String(raw))}`);
         } catch {
           // page already gone
         }

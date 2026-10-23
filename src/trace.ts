@@ -53,3 +53,55 @@ export class Trace {
       .join("\n");
   }
 }
+
+/** Fields of PerformanceNavigationTiming the page reports, in ms. */
+export interface NavTiming {
+  startTime?: number;
+  redirectEnd?: number;
+  fetchStart?: number;
+  domainLookupStart?: number;
+  domainLookupEnd?: number;
+  connectStart?: number;
+  connectEnd?: number;
+  requestStart?: number;
+  responseStart?: number;
+  responseEnd?: number;
+  domContentLoadedEventEnd?: number;
+  loadEventEnd?: number;
+  fcp?: number;
+}
+
+/**
+ * One readable line from a page's navigation timing: where the time went
+ * between the start of the navigation and the page being loaded. Phases that
+ * the page didn't report are skipped.
+ */
+export function describeNavTiming(raw: string): string {
+  let t: NavTiming;
+  try {
+    t = JSON.parse(raw) as NavTiming;
+  } catch {
+    return `unreadable timing: ${raw}`;
+  }
+  const n = (v: number | undefined): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const span = (label: string, a?: number, b?: number): string | null => {
+    const x = n(a);
+    const y = n(b);
+    return x === null || y === null ? null : `${label} ${Math.round(y - x)}`;
+  };
+  const parts = [
+    span("queued-before-fetch", t.startTime, t.fetchStart),
+    span("dns", t.domainLookupStart, t.domainLookupEnd),
+    span("connect", t.connectStart, t.connectEnd),
+    span("sent-to-first-byte", t.requestStart, t.responseStart),
+    span("download", t.responseStart, t.responseEnd),
+    span("parse-to-DOMContentLoaded", t.responseEnd, t.domContentLoadedEventEnd),
+    span("to-load", t.domContentLoadedEventEnd, t.loadEventEnd),
+  ].filter((p): p is string => p !== null);
+  const fcp = n(t.fcp);
+  if (fcp !== null) parts.push(`first-paint-at ${Math.round(fcp)}`);
+  const total = n(t.loadEventEnd);
+  const head = total === null ? "" : `total ${Math.round(total)} ms | `;
+  return `${head}${parts.join(" | ")} (all ms)`;
+}

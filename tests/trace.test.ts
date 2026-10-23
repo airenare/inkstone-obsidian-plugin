@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Trace } from "../src/trace";
+import { describeNavTiming, Trace } from "../src/trace";
 
 function clock(times: number[]) {
   let i = 0;
@@ -49,5 +49,30 @@ describe("Trace", () => {
     t.clear();
     expect(t.size).toBe(0);
     expect(t.format()).toBe("(no events recorded yet)");
+  });
+});
+
+describe("describeNavTiming", () => {
+  it("breaks a navigation into phases so the slow one stands out", () => {
+    const line = describeNavTiming(
+      JSON.stringify({
+        startTime: 0, fetchStart: 2, domainLookupStart: 2, domainLookupEnd: 2,
+        connectStart: 2, connectEnd: 3, requestStart: 4, responseStart: 1500,
+        responseEnd: 1520, domContentLoadedEventEnd: 1540, loadEventEnd: 1550,
+        fcp: 1700,
+      }),
+    );
+    expect(line).toContain("total 1550 ms");
+    expect(line).toContain("sent-to-first-byte 1496");
+    expect(line).toContain("queued-before-fetch 2");
+    expect(line).toContain("download 20");
+    expect(line).toContain("first-paint-at 1700");
+  });
+
+  it("skips phases the page didn't report and survives junk", () => {
+    expect(describeNavTiming(JSON.stringify({ loadEventEnd: 900 }))).toBe(
+      "total 900 ms |  (all ms)",
+    );
+    expect(describeNavTiming("not json")).toContain("unreadable timing");
   });
 });
