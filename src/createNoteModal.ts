@@ -259,6 +259,18 @@ export class CreateNoteModal extends Modal {
     el.empty();
     const vis = this.visibility();
 
+    // "Create homepage" with a homepage already in place only offers
+    // subfolders (see availableModes); say so instead of switching quietly.
+    const { type, secondary } = this.opts;
+    if (type === "homepage" && !secondary && hasRootHomepage(this.notes)) {
+      el.createEl("p", {
+        text:
+          "A homepage already exists; this creates a section homepage " +
+          "in a subfolder.",
+        cls: "setting-item-description",
+      });
+    }
+
     if (vis.name) this.renderName(el, vis.homepageRoot);
     if (vis.location || vis.folder) this.renderLocation(el);
     if (vis.private) this.renderPrivate(el, vis.token);

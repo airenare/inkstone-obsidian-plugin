@@ -4,10 +4,12 @@ import {
   debounce,
   FileView,
   ItemView,
+  Menu,
   Notice,
   TFile,
   WorkspaceLeaf,
 } from "obsidian";
+import { CREATE_COMMANDS } from "./createCommands";
 import type { CreateType } from "./createNoteLogic";
 import { GitPanel } from "./gitPanel";
 import { obsidianFetcher } from "./obsidianFetcher";
@@ -72,17 +74,7 @@ const STDERR_LINES = 60;
 const SITE_SCAN_DEBOUNCE_MS = 500;
 
 /** The "Create ..." buttons on the empty pane of a site with a homepage. */
-const CREATE_BUTTONS: {
-  label: string;
-  type: CreateType;
-  secondary?: boolean;
-}[] = [
-  { label: "Create page", type: "page" },
-  { label: "Create listing", type: "listing" },
-  { label: "Create feed", type: "feed" },
-  { label: "Create book", type: "book" },
-  { label: "Create secondary homepage", type: "homepage", secondary: true },
-];
+const CREATE_BUTTONS = CREATE_COMMANDS.filter((c) => c.emptyPane);
 
 function newPartition(): string {
   // Not "persist:", so cookies live in memory only and die with the view.
@@ -155,6 +147,9 @@ export class InkStonePreviewView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.buildUi();
+    this.addAction("file-plus", "Create note", (evt) =>
+      this.showCreateMenu(evt),
+    );
     this.rememberEditorLeaf(this.app.workspace.getMostRecentLeaf());
     this.activeFile = this.app.workspace.getActiveFile();
 
@@ -180,6 +175,8 @@ export class InkStonePreviewView extends ItemView {
     this.registerEvent(metadataCache.on("deleted", rescan));
     this.registerEvent(metadataCache.on("resolved", rescan));
     this.registerEvent(vault.on("rename", rescan));
+    // Never run a pending rescan after the view closes.
+    this.register(() => rescan.cancel());
 
     this.onServerStatus(this.plugin.server.status);
     void this.connect();
@@ -427,6 +424,19 @@ export class InkStonePreviewView extends ItemView {
     });
   }
 
+  /** The header's "Create note" menu: every create action. */
+  private showCreateMenu(evt: MouseEvent): void {
+    const menu = new Menu();
+    for (const c of CREATE_COMMANDS) {
+      menu.addItem((item) =>
+        item
+          .setTitle(c.name)
+          .onClick(() => this.createDialog(c.type, c.secondary)),
+      );
+    }
+    menu.showAtMouseEvent(evt);
+  }
+
   private showFirstRun(kind: "setup" | "create-homepage"): void {
     const text = firstRunPanel(kind);
     const actions: PanelAction[] =
@@ -454,7 +464,7 @@ export class InkStonePreviewView extends ItemView {
       title: "Open a note in the site folder to preview it.",
       actions: canCreate
         ? CREATE_BUTTONS.map((b) => ({
-            label: b.label,
+            label: b.name,
             onClick: () => this.createDialog(b.type, b.secondary),
           }))
         : undefined,

@@ -14,6 +14,7 @@ import {
   createReloadScheduler,
   type ReloadScheduler,
 } from "./autoReload";
+import { CREATE_COMMANDS } from "./createCommands";
 import { planCreation, type CreateType } from "./createNoteLogic";
 import { CreateNoteModal } from "./createNoteModal";
 import { executePlan } from "./createNotes";
@@ -59,35 +60,6 @@ export interface CreateDialogOptions {
   /** Editor leaf to use when no Markdown view is active (the pane). */
   leaf?: WorkspaceLeaf | null;
 }
-
-const CREATE_COMMANDS: {
-  id: string;
-  name: string;
-  type: CreateType;
-  secondary?: boolean;
-}[] = [
-  { id: "create-homepage", name: "Create homepage", type: "homepage" },
-  { id: "create-page", name: "Create page", type: "page" },
-  { id: "create-book", name: "Create book", type: "book" },
-  { id: "create-listing", name: "Create listing", type: "listing" },
-  { id: "create-feed", name: "Create feed", type: "feed" },
-  {
-    id: "create-secondary-homepage",
-    name: "Create secondary homepage",
-    type: "homepage",
-    secondary: true,
-  },
-  {
-    id: "create-translations-note",
-    name: "Create translations note",
-    type: "translations",
-  },
-  {
-    id: "create-language-variant",
-    name: "Create language variant",
-    type: "variant",
-  },
-];
 
 /** Vault path of a file's folder; "" for the vault root. */
 function folderOf(file: TFile): string {
