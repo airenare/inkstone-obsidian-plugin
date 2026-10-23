@@ -145,6 +145,11 @@ export default class InkStonePlugin extends Plugin {
       name: "Restart server",
       callback: () => void this.restartServer(),
     });
+    this.addCommand({
+      id: "stop-server",
+      name: "Stop server",
+      callback: () => void this.stopServerAndClose(),
+    });
     for (const c of CREATE_COMMANDS) {
       this.addCommand({
         id: c.id,
@@ -312,6 +317,7 @@ export default class InkStonePlugin extends Plugin {
           type,
           siteRel,
           editor,
+          sourceLeaf: view?.leaf ?? null,
           activeFolder,
           variantSource: { path: file.path, fm },
           language: code,
@@ -323,6 +329,7 @@ export default class InkStonePlugin extends Plugin {
       type,
       siteRel,
       editor,
+      sourceLeaf: view?.leaf ?? null,
       activeFolder,
       secondary: opts.secondary,
     }).open();
@@ -408,6 +415,15 @@ export default class InkStonePlugin extends Plugin {
     } catch (e) {
       return this.startFailed(e);
     }
+  }
+
+  /**
+   * Stops the server and closes the preview pane. Opening the preview
+   * again starts the server as usual.
+   */
+  async stopServerAndClose(): Promise<void> {
+    await this.server.stop();
+    this.app.workspace.detachLeavesOfType(VIEW_TYPE_PREVIEW);
   }
 
   async restartServer(): Promise<void> {

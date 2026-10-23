@@ -61,7 +61,7 @@ You pick the folder (the current one, an existing one, or a new one inside the s
 
 **Navigation.** A page or book created at the site root (and not Private) gets an **Add to navigation** checkbox, which writes `menu_order` so the page is pinned to the top bar. A listing, feed or secondary homepage in a top-level section folder already appears in the bar, so for those the checkbox reads **Hide from navigation** and writes `nav_hidden: true`. Elsewhere there's no checkbox. The page stays reachable by its link.
 
-**Languages.** A language variant copies the open note's `website`, `title`, `slug`, `date`, `tags`, `summary` and `type`, and adds `lang:`. It opens beside the original. It's served at `/{slug}/{lang}`, and InkStone adds the language toggle. Set `slug:` in the original note before you translate a variant's title. InkStone derives the slug from the title otherwise, and the two variants would stop matching. A translations note holds the site's interface strings (Search, Tags, Read more...) for one language. Russian is bundled, so a Russian note comes pre-filled. For any other language you get the key list to fill in. Tick **Also create translations note** in the variant form to make both at once; an existing one for that language is reused.
+**Languages.** A language variant copies the open note's `website`, `title`, `slug`, `date`, `tags`, `summary` and `type`, and adds `lang:`. It opens as a new tab in the same group as the original, so the preview keeps its own pane. It's served at `/{slug}/{lang}`, and InkStone adds the language toggle. Set `slug:` in the original note before you translate a variant's title. InkStone derives the slug from the title otherwise, and the two variants would stop matching. A translations note holds the site's interface strings (Search, Tags, Read more...) for one language. Russian is bundled, so a Russian note comes pre-filled. For any other language you get the key list to fill in. Tick **Also create translations note** in the variant form to make both at once; an existing one for that language is reused.
 
 **Git, from nothing.** In the git panel, a folder that isn't a repo shows **Initialize repository**, and a repo without a remote shows a **Remote URL** field with **Set remote**. It takes an `https://`, `ssh://` or `git://` URL, or the short `git@host:user/repo.git` form; local paths and git's helper transports (`ext::`, `file:`) are refused. After that, Commit and Push work as described below.
 
@@ -80,7 +80,7 @@ The plugin doesn't deploy anything. When the site is in a git repo with a remote
 
 Change the site folder, checkout or Python path while the server's running and the plugin restarts it for you.
 
-There's also a command, **Restart server**, and the preview toolbar shows the server status with a Restart button if it ever crashes.
+The preview toolbar shows the server status and has two buttons. **Restart** restarts InkStone, for changes it doesn't pick up while running. **Stop** stops the server and closes the preview pane; opening the preview again starts it. The same two actions are commands: **Restart server** and **Stop server**.
 
 ## The preview pane
 

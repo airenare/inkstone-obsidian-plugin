@@ -76,8 +76,8 @@ export interface PlannedFile {
 export interface CreationPlan {
   files: PlannedFile[];
   openPath: string;
-  /** "split" opens the note beside the current one (language variants). */
-  openIn: "split" | "same";
+  /** "tab" opens a new tab next to the source note (language variants). */
+  openIn: "tab" | "same";
   linkName?: string;
   notices: string[];
   warnings: string[];
@@ -328,7 +328,7 @@ export function planCreation(
   const plan: CreationPlan = {
     files: draft.files,
     openPath,
-    openIn: req.type === "variant" ? "split" : "same",
+    openIn: req.type === "variant" ? "tab" : "same",
     notices: draft.notices,
     warnings: draft.warnings,
   };

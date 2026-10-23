@@ -1,4 +1,4 @@
-import { App, Editor, Notice, TFile } from "obsidian";
+import { App, Editor, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import { firstExistingPath, type CreationPlan } from "./createNoteLogic";
 
 /**
@@ -42,6 +42,7 @@ export async function executePlan(
   app: App,
   plan: CreationPlan,
   editor: Editor | null,
+  sourceLeaf: WorkspaceLeaf | null = null,
 ): Promise<ExecuteResult> {
   try {
     const taken = await firstExistingPath(plan.files, (p) =>
@@ -79,10 +80,15 @@ export async function executePlan(
   try {
     const note = app.vault.getAbstractFileByPath(plan.openPath);
     if (note instanceof TFile) {
-      const leaf =
-        plan.openIn === "split"
-          ? app.workspace.getLeaf("split")
-          : app.workspace.getLeaf(false);
+      let leaf: WorkspaceLeaf;
+      if (plan.openIn === "tab") {
+        // A new tab goes into the active tab group. The preview pane may be
+        // the active one, so make the source note's group active first.
+        if (sourceLeaf) app.workspace.setActiveLeaf(sourceLeaf, { focus: true });
+        leaf = app.workspace.getLeaf("tab");
+      } else {
+        leaf = app.workspace.getLeaf(false);
+      }
       await leaf.openFile(note);
     }
   } catch (err) {

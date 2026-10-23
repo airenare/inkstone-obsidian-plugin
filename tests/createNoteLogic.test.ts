@@ -561,7 +561,7 @@ describe("planCreation: variant", () => {
       },
       ctx(),
     );
-    expect(variant.openIn).toBe("split");
+    expect(variant.openIn).toBe("tab");
     const page = ok(
       { type: "page", name: "P", folder: "site/blog" },
       ctx(),

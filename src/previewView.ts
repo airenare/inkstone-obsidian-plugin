@@ -195,7 +195,6 @@ export class InkStonePreviewView extends ItemView {
   onServerStatus(status: ServerStatus): void {
     if (!this.dotEl) return; // not opened yet; onOpen reads the status
     this.updateDot(status);
-    this.restartBtn.toggle(status === "crashed");
     if (status === "starting" || status === "crashed") {
       if (this.webview) this.needsReload = true;
     }
@@ -756,13 +755,23 @@ export class InkStonePreviewView extends ItemView {
     );
 
     this.restartBtn = bar.createEl("button", {
-      cls: "inkstone-restart mod-warning",
+      cls: "inkstone-restart",
       text: "Restart",
+      attr: { title: "Restart the server to pick up changes it doesn't reload" },
     });
     this.restartBtn.addEventListener("click", () =>
       void this.plugin.restartServer(),
     );
-    this.restartBtn.hide();
+    const stopBtn = bar.createEl("button", {
+      cls: "inkstone-stop",
+      text: "Stop",
+      attr: {
+        title: "Stop the server and close this pane. Opening the preview starts it again",
+      },
+    });
+    stopBtn.addEventListener("click", () =>
+      void this.plugin.stopServerAndClose(),
+    );
 
     this.gitPanel = new GitPanel(root, {
       getService: () => this.plugin.gitService(),

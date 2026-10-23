@@ -6,6 +6,7 @@ import {
   Setting,
   TextComponent,
   ToggleComponent,
+  WorkspaceLeaf,
 } from "obsidian";
 import {
   fieldVisibility,
@@ -39,6 +40,8 @@ export interface CreateNoteOptions {
   /** Site folder as a vault path; "" when it is the vault root. */
   siteRel: string;
   editor: Editor | null;
+  /** The leaf of the open note; a variant opens as a tab beside it. */
+  sourceLeaf?: WorkspaceLeaf | null;
   /** Vault path of the open note's folder, if any. */
   activeFolder: string | null;
   variantSource?: { path: string; fm: Record<string, unknown> };
@@ -656,7 +659,12 @@ export class CreateNoteModal extends Modal {
     this.refreshStatus();
     let error: string;
     try {
-      const done = await executePlan(this.app, result.plan, this.opts.editor);
+      const done = await executePlan(
+        this.app,
+        result.plan,
+        this.opts.editor,
+        this.opts.sourceLeaf ?? null,
+      );
       if (done.ok) {
         // Partial problems are already in executePlan's sticky Notice.
         this.close();
