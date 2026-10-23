@@ -374,8 +374,17 @@ export default class InkStonePlugin extends Plugin {
         new Notice(result.error);
         return;
       }
-      // executePlan reports success and failure with its own Notice.
-      void executePlan(this.app, result.plan, null);
+      // executePlan reports success (and partial failure) itself; a plain
+      // failure means nothing was written and is shown here.
+      executePlan(this.app, result.plan, null).then(
+        (done) => {
+          if (!done.ok) new Notice(done.error);
+        },
+        (err: unknown) => {
+          const text = err instanceof Error ? err.message : String(err);
+          new Notice(`Couldn't create the translations note: ${text}`);
+        },
+      );
     }).open();
   }
 

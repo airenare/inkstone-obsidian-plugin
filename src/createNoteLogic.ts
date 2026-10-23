@@ -76,6 +76,8 @@ export interface PlannedFile {
 export interface CreationPlan {
   files: PlannedFile[];
   openPath: string;
+  /** "split" opens the note beside the current one (language variants). */
+  openIn: "split" | "same";
   linkName?: string;
   notices: string[];
   warnings: string[];
@@ -237,12 +239,19 @@ function draftFor(req: CreateRequest, ctx: PlanContext): Draft | string {
     if (hasRootHomepage(ctx.notes)) {
       return "The site already has a homepage.";
     }
+    const homePath = joinVaultPath(ctx.siteRel, "Home.md");
+    if (ctx.exists(homePath)) {
+      return (
+        `${homePath} already exists but has no \`type: homepage\`; ` +
+        "add it to its frontmatter or rename the file."
+      );
+    }
     if (!title) return "Name can't be empty";
     const parsed = parseLang(req.language);
     if (!parsed.ok) return BAD_LANG;
     const files = [
       {
-        path: joinVaultPath(ctx.siteRel, "Home.md"),
+        path: homePath,
         content: buildNote({
           type: "homepage",
           title,
@@ -319,6 +328,7 @@ export function planCreation(
   const plan: CreationPlan = {
     files: draft.files,
     openPath,
+    openIn: req.type === "variant" ? "split" : "same",
     notices: draft.notices,
     warnings: draft.warnings,
   };
@@ -326,6 +336,21 @@ export function planCreation(
     plan.linkName = baseName(openPath);
   }
   return { ok: true, plan };
+}
+
+/**
+ * The first planned path that already exists, or null. `exists` is the
+ * disk check, which is case-insensitive on macOS and Windows, so it also
+ * catches `home.md` when the plan writes `Home.md`.
+ */
+export async function firstExistingPath(
+  files: PlannedFile[],
+  exists: (path: string) => Promise<boolean>,
+): Promise<string | null> {
+  for (const file of files) {
+    if (await exists(file.path)) return file.path;
+  }
+  return null;
 }
 
 export function fieldVisibility(

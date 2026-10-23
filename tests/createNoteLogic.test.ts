@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fieldVisibility,
+  firstExistingPath,
   noteFileBase,
   planCreation,
   type CreateRequest,
@@ -323,6 +324,30 @@ describe("planCreation: homepage", () => {
     });
   });
 
+  it("explains a root Home.md that is not a homepage", () => {
+    const r = planCreation(
+      { type: "homepage", name: "Site", folder: "site" },
+      ctx({
+        notes: [n("Home.md", { title: "Home" })],
+        exists: (p) => p === "site/Home.md",
+      }),
+    );
+    expect(r).toEqual({
+      ok: false,
+      error:
+        "site/Home.md already exists but has no `type: homepage`; " +
+        "add it to its frontmatter or rename the file.",
+    });
+  });
+
+  it("root homepage opens in the same pane", () => {
+    const plan = ok(
+      { type: "homepage", name: "Site", folder: "site" },
+      ctx({ notes: [] }),
+    );
+    expect(plan.openIn).toBe("same");
+  });
+
   it("root homepage when the site is the vault root", () => {
     const plan = ok(
       { type: "homepage", name: "Site", folder: "", language: "ru" },
@@ -523,6 +548,30 @@ describe("planCreation: variant", () => {
     expect(c).not.toContain("menu_order");
     expect(plan.openPath).toBe("site/About_RU.md");
     expect(plan.linkName).toBe("About_RU");
+  });
+
+  it("a variant opens beside the original; a page does not", () => {
+    const variant = ok(
+      {
+        type: "variant",
+        name: "",
+        folder: "",
+        language: "ru",
+        variantSource: about,
+      },
+      ctx(),
+    );
+    expect(variant.openIn).toBe("split");
+    const page = ok(
+      { type: "page", name: "P", folder: "site/blog" },
+      ctx(),
+    );
+    expect(page.openIn).toBe("same");
+    const tr = ok(
+      { type: "translations", name: "", folder: "", language: "de" },
+      ctx(),
+    );
+    expect(tr.openIn).toBe("same");
   });
 
   it("without alsoTranslations plans one file", () => {
@@ -783,5 +832,26 @@ describe("fieldVisibility", () => {
     expect(
       fieldVisibility("page", { folder: "other" }, "site", true).navigation,
     ).toBe("none");
+  });
+});
+
+describe("firstExistingPath", () => {
+  const files = [
+    { path: "site/Home.md", content: "" },
+    { path: "site/translations_RU.md", content: "" },
+  ];
+
+  it("returns null when nothing exists", async () => {
+    expect(await firstExistingPath(files, () => Promise.resolve(false))).toBe(
+      null,
+    );
+  });
+
+  it("checks every file, not just the first", async () => {
+    const onDisk = new Set(["site/translations_ru.md"]);
+    const exists = (p: string) => Promise.resolve(onDisk.has(p.toLowerCase()));
+    expect(await firstExistingPath(files, exists)).toBe(
+      "site/translations_RU.md",
+    );
   });
 });

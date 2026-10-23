@@ -642,12 +642,20 @@ export class CreateNoteModal extends Modal {
     }
     this.busy = true;
     this.refreshStatus();
-    const done = await executePlan(this.app, result.plan, this.opts.editor);
-    this.busy = false;
-    if (done.ok) {
-      this.close();
-      return;
+    let error: string;
+    try {
+      const done = await executePlan(this.app, result.plan, this.opts.editor);
+      if (done.ok) {
+        // Partial problems are already in executePlan's sticky Notice.
+        this.close();
+        return;
+      }
+      error = done.error;
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+    } finally {
+      this.busy = false;
     }
-    this.refreshStatus(done.error);
+    this.refreshStatus(error);
   }
 }
