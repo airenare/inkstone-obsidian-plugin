@@ -5,7 +5,7 @@ import * as http from "http";
 import * as net from "net";
 import * as os from "os";
 import * as path from "path";
-import { GitError, GitService } from "../src/git";
+import { GitError, GitService, validateRemoteUrl } from "../src/git";
 
 const BASE_ENV: NodeJS.ProcessEnv = {
   ...process.env,
@@ -421,5 +421,64 @@ describe("GitService construction", () => {
   });
   it("accepts an absolute folder", () => {
     expect(() => new GitService("/tmp/site")).not.toThrow();
+  });
+});
+
+describe("validateRemoteUrl", () => {
+  it("rejects empty, spaced and option-like values", () => {
+    expect(validateRemoteUrl("")).not.toBeNull();
+    expect(validateRemoteUrl("   ")).not.toBeNull();
+    expect(validateRemoteUrl("a b")).not.toBeNull();
+    expect(validateRemoteUrl("-oops")).not.toBeNull();
+  });
+
+  it("accepts ssh and https urls", () => {
+    expect(validateRemoteUrl("git@github.com:u/r.git")).toBeNull();
+    expect(validateRemoteUrl("https://github.com/u/r.git")).toBeNull();
+  });
+});
+
+describe("GitService.init and setRemote", () => {
+  it("init creates a repo on main", async () => {
+    const d = path.join(tmp, "fresh");
+    fs.mkdirSync(d);
+    const s = svc(d);
+    expect(await s.state()).toEqual({ kind: "not-repo" });
+    await s.init();
+    expect(await s.state()).toEqual({
+      kind: "repo",
+      hasRemote: false,
+      branch: "main",
+    });
+  });
+
+  it("setRemote adds origin", async () => {
+    const d = path.join(tmp, "r");
+    initRepo(d);
+    const s = svc(d);
+    await s.setRemote("https://github.com/u/r.git");
+    expect(await s.state()).toMatchObject({ hasRemote: true });
+    expect(git(d, "remote", "get-url", "origin").trim()).toBe(
+      "https://github.com/u/r.git",
+    );
+  });
+
+  it("setRemote rejects option-like and invalid urls", async () => {
+    const d = path.join(tmp, "r");
+    initRepo(d);
+    const s = svc(d);
+    await expect(s.setRemote("-x")).rejects.toBeInstanceOf(GitError);
+    await expect(s.setRemote("a b")).rejects.toBeInstanceOf(GitError);
+    expect(await s.state()).toMatchObject({ hasRemote: false });
+  });
+
+  it("setRemote surfaces git's error when origin exists", async () => {
+    const d = path.join(tmp, "r");
+    initRepo(d);
+    const s = svc(d);
+    await s.setRemote("https://github.com/u/r.git");
+    await expect(s.setRemote("https://github.com/u/o.git")).rejects.toThrow(
+      /already exists/,
+    );
   });
 });

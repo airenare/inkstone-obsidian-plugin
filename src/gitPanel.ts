@@ -1,7 +1,9 @@
 import { Notice } from "obsidian";
-import { GitError, type GitChange, type GitService } from "./git";
+import { GitError, validateRemoteUrl, type GitChange, type GitService } from "./git";
 import {
   buttonStates,
+  canInit,
+  canSetRemote,
   formatDiffForDisplay,
   NO_SITE,
   type ButtonState,
@@ -66,6 +68,11 @@ export class GitPanel {
   private commitBtn: HTMLButtonElement;
   private pushBtn: HTMLButtonElement;
   private refreshBtn: HTMLButtonElement;
+  private setupEl: HTMLElement;
+  private initBtn: HTMLButtonElement;
+  private remoteRow: HTMLElement;
+  private remoteInput: HTMLInputElement;
+  private remoteBtn: HTMLButtonElement;
 
   constructor(parent: HTMLElement, private opts: GitPanelOptions) {
     this.el = parent.createEl("details", { cls: "inkstone-git" });
@@ -101,6 +108,27 @@ export class GitPanel {
     this.pushBtn.addEventListener("click", () =>
       void this.act((svc) => svc.push()),
     );
+
+    this.setupEl = body.createDiv({ cls: "inkstone-git-setup" });
+    this.initBtn = this.setupEl.createEl("button", {
+      text: "Initialize repository",
+    });
+    this.initBtn.addEventListener("click", () =>
+      void this.act((svc) => svc.init()),
+    );
+    this.remoteRow = this.setupEl.createDiv({ cls: "inkstone-git-row" });
+    this.remoteInput = this.remoteRow.createEl("input", {
+      cls: "inkstone-git-message",
+      attr: {
+        type: "text",
+        placeholder: "Remote URL",
+        "aria-label": "Remote URL",
+      },
+    });
+    this.remoteBtn = this.remoteRow.createEl("button", {
+      text: "Set remote",
+    });
+    this.remoteBtn.addEventListener("click", () => void this.setRemote());
 
     this.inlineEl = body.createDiv({ cls: "inkstone-git-inline" });
     this.errorEl = body.createDiv({ cls: "inkstone-git-error" });
@@ -204,6 +232,19 @@ export class GitPanel {
     return this.act((svc) => svc.commit(paths, message));
   }
 
+  private setRemote(): Promise<void> {
+    const url = this.remoteInput.value.trim();
+    const bad = validateRemoteUrl(url);
+    if (bad) {
+      this.showError(new Error(bad));
+      return Promise.resolve();
+    }
+    return this.act(async (svc) => {
+      await svc.setRemote(url);
+      this.remoteInput.value = "";
+    });
+  }
+
   private setBusy(on: boolean): void {
     this.busy = on;
     this.updateButtons();
@@ -230,6 +271,11 @@ export class GitPanel {
     this.applyButton(this.pushBtn, s.push);
     this.refreshBtn.disabled = this.busy;
     this.msgInput.disabled = this.state.kind !== "repo";
+    this.initBtn.toggle(canInit(this.state));
+    this.initBtn.disabled = this.busy;
+    this.remoteRow.toggle(canSetRemote(this.state));
+    this.remoteInput.disabled = this.busy;
+    this.remoteBtn.disabled = this.busy;
     this.inlineEl.setText(this.busy ? "Working..." : why);
   }
 

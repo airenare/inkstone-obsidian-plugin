@@ -93,6 +93,19 @@ export class GitService {
     return { kind: "repo", hasRemote: remotes.length > 0, branch };
   }
 
+  /** Create a repository in the site folder, with `main` as the branch. */
+  async init(): Promise<void> {
+    await this.run(["init", "--initial-branch=main"]);
+  }
+
+  /** Add `origin`. The URL is an argument (no shell), after `--`. */
+  async setRemote(url: string): Promise<void> {
+    const trimmed = url.trim();
+    const bad = validateRemoteUrl(trimmed);
+    if (bad) throw new GitError(bad);
+    await this.run(["remote", "add", "--", "origin", trimmed]);
+  }
+
   async changes(): Promise<GitChange[]> {
     const prefix = (await this.run(["rev-parse", "--show-prefix"])).stdout
       .replace(/\r?\n$/, "");
@@ -331,6 +344,15 @@ export class GitService {
       child.stdin?.end();
     });
   }
+}
+
+/** Error message for an unusable remote URL, or null when it looks fine. */
+export function validateRemoteUrl(url: string): string | null {
+  const u = url.trim();
+  if (u === "") return "Enter a remote URL.";
+  if (/\s/.test(u)) return "A remote URL cannot contain spaces.";
+  if (u.startsWith("-")) return "A remote URL cannot start with a dash.";
+  return null;
 }
 
 function normalizeRel(p: string): string {

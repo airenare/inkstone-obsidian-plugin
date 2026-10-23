@@ -33,6 +33,16 @@ export function buttonStates(state: PanelGitState): ButtonStates {
   };
 }
 
+/** Offer "Initialize repository" only when the folder is not in a repo. */
+export function canInit(state: PanelGitState): boolean {
+  return state.kind === "not-repo";
+}
+
+/** Offer "Set remote" only for a repo that has no remote yet. */
+export function canSetRemote(state: PanelGitState): boolean {
+  return state.kind === "repo" && !state.hasRemote;
+}
+
 /** Most diff text (in bytes) the panel renders. */
 export const DIFF_MAX_BYTES = 200 * 1024;
 

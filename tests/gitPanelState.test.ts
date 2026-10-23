@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buttonStates } from "../src/gitPanelState";
+import { buttonStates, canInit, canSetRemote } from "../src/gitPanelState";
 
 describe("buttonStates", () => {
   it("enables everything for a repo with a remote", () => {
@@ -77,5 +77,24 @@ describe("formatDiffForDisplay", () => {
     expect(r.truncated).toBe(true);
     expect(r.text).toBe("€€€");
     expect(r.text).not.toContain("�");
+  });
+});
+
+describe("canInit and canSetRemote", () => {
+  const withRemote = { kind: "repo", hasRemote: true, branch: "main" } as const;
+  const noRemote = { kind: "repo", hasRemote: false, branch: "main" } as const;
+
+  it("offers init only when the folder is not a repo", () => {
+    expect(canInit({ kind: "not-repo" })).toBe(true);
+    expect(canInit({ kind: "no-site" })).toBe(false);
+    expect(canInit(noRemote)).toBe(false);
+    expect(canInit(withRemote)).toBe(false);
+  });
+
+  it("offers set remote only for a repo without one", () => {
+    expect(canSetRemote(noRemote)).toBe(true);
+    expect(canSetRemote(withRemote)).toBe(false);
+    expect(canSetRemote({ kind: "not-repo" })).toBe(false);
+    expect(canSetRemote({ kind: "no-site" })).toBe(false);
   });
 });
