@@ -228,3 +228,21 @@
 .inkstone-hidden-input {
   display: none;
 }
+
+/* Note creation dialog */
+.inkstone-create-hint {
+  margin-top: var(--size-4-1);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.inkstone-create-hint.mod-error,
+.inkstone-create-error {
+  color: var(--text-error);
+}
+.inkstone-create-warning {
+  color: var(--text-warning);
+}
+.inkstone-create-status:not(:empty) {
+  padding: var(--size-4-2) 0;
+  font-size: var(--font-ui-small);
+}
