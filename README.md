@@ -15,7 +15,7 @@ Edit a note on the left. See the real page on the right.
 ## Requirements
 
 - **Obsidian desktop.** Mobile isn't supported, because the plugin starts a local process.
-- **A local [InkStone](https://github.com/airenare/inkstone) checkout, version 1.57.0 or newer,** with its Python environment set up (by default, a `.venv` inside the checkout). If you don't have it yet, clone it from [github.com/airenare/inkstone](https://github.com/airenare/inkstone) and follow its README to install the requirements. The plugin reads the checkout's `VERSION` file and tells you to `git pull` if it's older. Version 1.58.0 or newer is recommended: it makes the server stop with Obsidian even after a crash or force-quit.
+- **A local [InkStone](https://github.com/airenare/inkstone) checkout, version 1.57.0 or newer,** with its Python environment set up (by default, a `.venv` inside the checkout). If you don't have it yet, clone it from [github.com/airenare/inkstone](https://github.com/airenare/inkstone) and follow its README to install the requirements. The plugin reads the checkout's `VERSION` file and tells you to `git pull` if it's older. Version 1.58.2 or newer is recommended. It stops the server with Obsidian even after a crash or force-quit (1.58.0), stops reloading the whole site every time Obsidian or git touches its own files, which was making previews feel slow (1.58.1), and fixes a security hole where a deployed site could serve private files (1.58.2).
 - **`git`,** if you want the git panel.
 
 ## Install
@@ -107,6 +107,7 @@ Obsidian asks plugin authors to be upfront about a few things. Here's all of it.
 | A Python or Flask error in the settings | Install InkStone's requirements into the Python you chose (`pip install -r requirements.txt`), or point **Python executable** at the right venv. |
 | "Not published" in the pane | The note needs `website: true` in its frontmatter. For `.base` and `.canvas` files, rename them to end with `__website`. |
 | The preview doesn't reload when you save | Auto-reload needs the site folder to be inside the vault. A folder outside it still previews, but you'll need to reload by hand. |
+| Clicking a link takes a second or two to show the page | Update InkStone to 1.58.1 or newer. Older versions reload the whole site each time Obsidian rewrites its own `.obsidian/` files. Still slow? Run the command **Copy preview timing log** right after clicking and paste the result into an issue. It shows where the time went (the click, the editor, the server's reply, the page itself). |
 | A git timeout on a remote that uses SSH | Git may be waiting on a passphrase or host-key prompt it can't show. Load the key into your ssh-agent, or run `git push` once in a terminal. |
 
 ## Known limitations
