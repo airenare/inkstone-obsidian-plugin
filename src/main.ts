@@ -14,6 +14,7 @@ import {
 import { resolveSiteFolder } from "./paths";
 import { serverSettingsChanged } from "./settingsChange";
 import { InkStonePreviewView, VIEW_TYPE_PREVIEW } from "./previewView";
+import { Trace } from "./trace";
 import { InkStoneServer, type ServerStatus } from "./server";
 import {
   DEFAULT_SETTINGS,
@@ -33,6 +34,8 @@ export default class InkStonePlugin extends Plugin {
   server!: InkStoneServer;
   /** Why the last start attempt failed; "" after a successful start. */
   lastStartError = "";
+  /** Timeline of preview events, shared by every preview view. */
+  readonly trace = new Trace();
   private reloader: ReloadScheduler | null = null;
   private gitRefresher: ReloadScheduler | null = null;
   private settingsRestarter: ReloadScheduler | null = null;
@@ -89,6 +92,11 @@ export default class InkStonePlugin extends Plugin {
       id: "open-preview",
       name: "Open preview",
       callback: () => void this.activatePreview(),
+    });
+    this.addCommand({
+      id: "copy-timing-log",
+      name: "Copy preview timing log",
+      callback: () => void this.copyTimingLog(),
     });
     this.addCommand({
       id: "restart-server",
@@ -250,6 +258,18 @@ export default class InkStonePlugin extends Plugin {
       for (const v of this.previewViews()) v.onServerStatus("crashed");
     }
     return { ok: false, kind: "start", message };
+  }
+
+  /** Copies the latest preview click-to-page timeline to the clipboard. */
+  private async copyTimingLog(): Promise<void> {
+    const text = this.trace.format();
+    try {
+      await navigator.clipboard.writeText(text);
+      new Notice("Preview timing log copied to the clipboard.");
+    } catch {
+      new Notice("Couldn't copy the timing log; it's in the developer console.");
+      console.error(text);
+    }
   }
 
   async loadSettings(): Promise<void> {

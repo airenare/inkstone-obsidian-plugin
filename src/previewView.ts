@@ -232,6 +232,7 @@ export class InkStonePreviewView extends ItemView {
    * was superseded, so no reload lands on an error panel or a stale map.
    */
   async refreshAndReload(): Promise<void> {
+    this.plugin.trace.mark("auto-reload: refreshing the source map");
     const map = await this.fetchMap();
     if (!map) return;
     const before = this.map;
@@ -264,6 +265,7 @@ export class InkStonePreviewView extends ItemView {
   /** Reload the page currently shown in the webview. */
   reload(): void {
     if (!this.webview || !this.webviewReady || !this.currentUrl) return;
+    this.plugin.trace.mark("reload() of the shown page");
     this.webview.reload();
   }
 
@@ -374,6 +376,7 @@ export class InkStonePreviewView extends ItemView {
       return;
     }
     this.navCount++;
+    this.plugin.trace.mark(`navigate() loads ${displayUrl(url)}`);
     this.currentUrl = url;
     this.pendingTokenLoad = /[?&]token=/.test(url);
     this.urlEl.value = displayUrl(url);
@@ -398,6 +401,32 @@ export class InkStonePreviewView extends ItemView {
     wv.addClass("inkstone-webview");
     wv.setAttribute("partition", this.partition);
     wv.setAttribute("src", url);
+    for (const name of [
+      "did-start-loading",
+      "did-start-navigation",
+      "did-navigate",
+      "dom-ready",
+      "did-finish-load",
+      "did-stop-loading",
+    ]) {
+      wv.addEventListener(name, () => {
+        if (this.webview === wv) this.plugin.trace.mark(`page: ${name}`);
+      });
+    }
+    wv.addEventListener("did-finish-load", () => {
+      if (this.webview !== wv) return;
+      // When the page itself says it first painted, relative to its start.
+      void (async () => {
+        try {
+          const raw = await wv.executeJavaScript(
+            "JSON.stringify({fcp: (performance.getEntriesByType('paint').find(function (p) { return p.name === 'first-contentful-paint'; }) || {}).startTime, load: (performance.getEntriesByType('navigation')[0] || {}).loadEventEnd})",
+          );
+          this.plugin.trace.mark(`page reports (own clock): ${String(raw)}`);
+        } catch {
+          // page already gone
+        }
+      })();
+    });
     wv.addEventListener("dom-ready", () => {
       if (this.webview !== wv) return;
       this.webviewReady = true;
@@ -436,6 +465,7 @@ export class InkStonePreviewView extends ItemView {
 
   /** User clicked a link (or the page set location): sync the editor. */
   private onWillNavigate(url: string): void {
+    this.plugin.trace.mark(`click -> ${displayUrl(url)}`, true);
     if (this.baseUrl && originOf(url) !== originOf(this.baseUrl)) {
       // External link: keep the preview on the site. Only web and mail
       // links go to the system browser; other schemes are dropped.
@@ -541,7 +571,11 @@ export class InkStonePreviewView extends ItemView {
     if (view instanceof FileView && view.file === file) return;
     // The preview already shows this page; don't bounce it back.
     this.activeFile = file;
-    void leaf.openFile(file, { active: false });
+    this.plugin.trace.mark("editor: opening note");
+    void (async () => {
+      await leaf.openFile(file, { active: false });
+      this.plugin.trace.mark("editor: note opened");
+    })();
   }
 
   // ---- owner view ----
